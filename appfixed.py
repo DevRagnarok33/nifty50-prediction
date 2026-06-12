@@ -21,18 +21,28 @@ def load_data():
     local_path = 'NIFTY50_all.csv'
     if not os.path.exists(local_path):
         try:
-            import gdown
+            import requests
             file_id = "1YXM-hBa_2orAI2eMyyE5XE1Qrs4kJtVU"
-            # ✅ fuzzy=True handles large file virus-scan warnings from Google Drive
-            url = f"https://drive.google.com/uc?id={file_id}&export=download&confirm=t"
-            gdown.download(url, local_path, quiet=False, fuzzy=True)
+            # Step 1 — start download session
+            session = requests.Session()
+            url = "https://drive.google.com/uc?export=download"
+            response = session.get(url, params={'id': file_id}, stream=True)
+            # Step 2 — handle large file confirmation token
+            token = None
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    token = value
+                    break
+            if token:
+                response = session.get(url, params={'id': file_id, 'confirm': token}, stream=True)
+            # Step 3 — save file
+            with open(local_path, 'wb') as f:
+                for chunk in response.iter_content(32768):
+                    if chunk:
+                        f.write(chunk)
         except Exception as e:
             st.error(f"❌ Could not download dataset: {e}")
-            st.info("Make sure the file is shared as 'Anyone with the link' on Google Drive.")
             return None
-    if not os.path.exists(local_path):
-        st.error("❌ Dataset file not found.")
-        return None
     df = pd.read_csv(local_path)
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values(['Symbol', 'Date']).reset_index(drop=True)
