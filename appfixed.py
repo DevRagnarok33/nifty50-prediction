@@ -6,6 +6,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import os
 import requests
+import plotly.express as px
+import plotly.graph_objects as go
 
 # ── PAGE CONFIG ────────────────────────────────────────
 st.set_page_config(
@@ -318,7 +320,7 @@ elif page == "💼 Portfolio Constructor":
     )
 
 # ══════════════════════════════════════════════════════
-# PAGE 4 — RISK & BETA DASHBOARD
+# PAGE 4 — RISK & BETA DASHBOARD (INTERACTIVE)
 # ══════════════════════════════════════════════════════
 elif page == "⚠️ Risk & Beta Dashboard":
     st.title("⚠️ Risk & Beta Dashboard")
@@ -336,61 +338,97 @@ elif page == "⚠️ Risk & Beta Dashboard":
 
     st.markdown("---")
 
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    port_colors = ['mediumseagreen', 'steelblue', 'tomato']
+    # Create a 2x2 layout using Streamlit columns
+    row1_col1, row1_col2 = st.columns(2)
+    row2_col1, row2_col2 = st.columns(2)
 
-    beta_sorted = stats.sort_values('Beta')
-    colors_beta = ['tomato' if b > 1.2 else 'steelblue' if b > 0.8 else 'mediumseagreen'
-                   for b in beta_sorted['Beta']]
-    axes[0, 0].barh(beta_sorted['Symbol'], beta_sorted['Beta'], color=colors_beta)
-    axes[0, 0].axvline(x=1.0, color='black', linestyle='--', linewidth=1.5, label='Beta=1.0')
-    axes[0, 0].set_title('Beta — All Stocks\n(Green=Defensive, Blue=Moderate, Red=Aggressive)')
-    axes[0, 0].set_xlabel('Beta')
-    axes[0, 0].legend(fontsize=8)
-    axes[0, 0].grid(True, alpha=0.3)
+    # ── CHART 1: Beta — All Stocks (Top Left) ──
+    with row1_col1:
+        beta_sorted = stats.sort_values('Beta').copy()
+        
+        # Assign categories for coloring
+        def assign_risk(b):
+            if b > 1.2: return 'Aggressive (Red)'
+            elif b > 0.8: return 'Moderate (Blue)'
+            else: return 'Defensive (Green)'
+            
+        beta_sorted['Risk_Profile'] = beta_sorted['Beta'].apply(assign_risk)
+        
+        fig1 = px.bar(beta_sorted, x='Beta', y='Symbol', orientation='h',
+                      color='Risk_Profile',
+                      color_discrete_map={
+                          'Aggressive (Red)': 'tomato',
+                          'Moderate (Blue)': 'steelblue',
+                          'Defensive (Green)': 'mediumseagreen'
+                      },
+                      title='Beta — All Stocks', height=500)
+        
+        fig1.add_vline(x=1.0, line_dash="dash", line_color="black", annotation_text="Market Beta=1.0")
+        fig1.update_layout(showlegend=False, yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig1, use_container_width=True)
 
-    sc = axes[0, 1].scatter(stats['Ann_Volatility'], stats['Ann_Return'],
-                            c=stats['Sharpe_Ratio'], cmap='RdYlGn',
-                            s=80, alpha=0.8, edgecolors='white')
-    plt.colorbar(sc, ax=axes[0, 1], label='Sharpe Ratio')
-    for _, row in stats.iterrows():
-        axes[0, 1].annotate(row['Symbol'], (row['Ann_Volatility'], row['Ann_Return']),
-                            fontsize=6, alpha=0.7, xytext=(3, 3), textcoords='offset points')
-    axes[0, 1].set_title('Risk vs Return (color = Sharpe Ratio)')
-    axes[0, 1].set_xlabel('Volatility (Risk) %')
-    axes[0, 1].set_ylabel('Annual Return %')
-    axes[0, 1].grid(True, alpha=0.2)
+    # ── CHART 2: Risk vs Return (Top Right) ──
+    with row1_col2:
+        fig2 = px.scatter(stats, x='Ann_Volatility', y='Ann_Return',
+                          color='Sharpe_Ratio', color_continuous_scale='RdYlGn',
+                          hover_name='Symbol', size_max=15,
+                          title='Risk vs Return', height=500,
+                          labels={'Ann_Volatility': 'Volatility (Risk) %', 'Ann_Return': 'Annual Return %'})
+        
+        # Add text labels on the scatter points
+        fig2.update_traces(textposition='top center', marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
+        st.plotly_chart(fig2, use_container_width=True)
 
-    port_betas = [stats[stats['Symbol'].isin(p['Symbol'])]['Beta'].mean()
-                  for p in portfolios.values()]
-    bars = axes[1, 0].bar(list(portfolios.keys()), port_betas,
-                          color=port_colors, alpha=0.8, edgecolor='white')
-    axes[1, 0].axhline(y=1.0, color='black', linestyle='--', linewidth=1.5, label='Market Beta=1.0')
-    for bar, val in zip(bars, port_betas):
-        axes[1, 0].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                        f'{val:.3f}', ha='center', va='bottom', fontweight='bold')
-    axes[1, 0].set_title('Average Portfolio Beta')
-    axes[1, 0].set_ylabel('Beta')
-    axes[1, 0].legend()
-    axes[1, 0].grid(True, alpha=0.3)
+    # ── CHART 3: Average Portfolio Beta (Bottom Left) ──
+    with row2_col1:
+        port_betas = [stats[stats['Symbol'].isin(p['Symbol'])]['Beta'].mean() for p in portfolios.values()]
+        port_data = pd.DataFrame({
+            'Portfolio': list(portfolios.keys()),
+            'Beta': port_betas
+        })
+        
+        fig3 = px.bar(port_data, x='Portfolio', y='Beta', color='Portfolio',
+                      color_discrete_sequence=['mediumseagreen', 'steelblue', 'tomato'],
+                      text='Beta', title='Average Portfolio Beta', height=400)
+        
+        fig3.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+        fig3.add_hline(y=1.0, line_dash="dash", line_color="black", annotation_text="Market Beta=1.0")
+        fig3.update_layout(showlegend=False)
+        st.plotly_chart(fig3, use_container_width=True)
 
-    market_changes = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
-    for (name, _), beta, color in zip(portfolios.items(), port_betas, port_colors):
-        axes[1, 1].plot(market_changes, [m * beta for m in market_changes],
-                        'o-', linewidth=2, label=f'{name} (β={beta:.2f})', color=color)
-    axes[1, 1].plot(market_changes, market_changes, 'k--', linewidth=1, alpha=0.5, label='Market')
-    axes[1, 1].axhline(y=0, color='black', linewidth=0.5)
-    axes[1, 1].axvline(x=0, color='black', linewidth=0.5)
-    axes[1, 1].set_title('Sensitivity Simulation')
-    axes[1, 1].set_xlabel('Market Change (%)')
-    axes[1, 1].set_ylabel('Portfolio Change (%)')
-    axes[1, 1].legend(fontsize=9)
-    axes[1, 1].grid(True, alpha=0.3)
+    # ── CHART 4: Sensitivity Simulation (Bottom Right) ──
+    with row2_col2:
+        market_changes = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
+        sim_data = []
+        
+        # Base Market Line
+        for m in market_changes:
+            sim_data.append({'Market Change (%)': m, 'Portfolio Change (%)': m, 'Portfolio': 'Market (β=1.00)'})
+            
+        # Portfolio Lines
+        for (name, _), beta in zip(portfolios.items(), port_betas):
+            for m in market_changes:
+                sim_data.append({
+                    'Market Change (%)': m, 
+                    'Portfolio Change (%)': m * beta, 
+                    'Portfolio': f'{name} (β={beta:.2f})'
+                })
+                
+        sim_df = pd.DataFrame(sim_data)
+        
+        fig4 = px.line(sim_df, x='Market Change (%)', y='Portfolio Change (%)', color='Portfolio',
+                       markers=True, title='Sensitivity Simulation', height=400)
+        
+        # Make the market line dashed
+        for trace in fig4.data:
+            if 'Market' in trace.name:
+                trace.line.dash = 'dash'
+                trace.line.color = 'gray'
+                trace.marker.symbol = 'none'
 
-    plt.suptitle('Risk & Beta Dashboard', fontsize=14, fontweight='bold')
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
+        fig4.add_hline(y=0, line_color='black', line_width=1)
+        fig4.add_vline(x=0, line_color='black', line_width=1)
+        st.plotly_chart(fig4, use_container_width=True)
 
 # ══════════════════════════════════════════════════════
 # PAGE 5 — EXPLAINABLE RECOMMENDATIONS
