@@ -420,7 +420,7 @@ elif page == "⚠️ Risk & Beta Dashboard":
                        markers=True, title='Sensitivity Simulation', height=400)
         
         # Make the market line dashed
-       for trace in fig4.data:
+        for trace in fig4.data:
             if 'Market' in trace.name:
                 trace.line.dash = 'dash'
                 trace.line.color = 'gray'
