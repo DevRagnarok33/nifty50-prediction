@@ -176,17 +176,19 @@ if page == "🏠 Home":
 
     st.markdown("---")
     
-    st.markdown("### 📖 The Beginner's Metric Cheat Sheet")
-    st.write("We don't hide the complex math on this platform, but we do make it easy to read. Keep an eye out for these terms as you explore:")
+    st.markdown("### Quick Guide to Financial Metrics")
+    st.write("If you are new to analyzing stocks, here is a straightforward breakdown of the terms used across this dashboard:")
+    st.write("") 
+    
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.info("**📉 Volatility:** The roller-coaster metric. High volatility means the price swings wildly. Low means it's stable.")
-        st.success("**🛡️ Max Drawdown:** The worst-case scenario. If you bought at the absolute peak, this is how much you would have lost at the absolute bottom.")
+        st.markdown("**Volatility**\n\nMeasures how much a stock's price swings back and forth. High volatility means bigger price jumps and higher risk.")
+        st.markdown("<br>**Max Drawdown**\n\nThe maximum percentage drop a stock has experienced historically from its highest peak to its lowest point.", unsafe_allow_html=True)
     with c2:
-        st.warning("**⚖️ Sharpe Ratio:** The efficiency score. It tells you if the returns you are getting are worth the risk you are taking. (Higher is better).")
-        st.error("**🛑 Sortino Ratio:** Similar to Sharpe, but it only punishes stocks for dropping in price, ignoring upward swings. (Higher is better).")
+        st.markdown("**Sharpe Ratio**\n\nMeasures your return compared to the risk you took. A higher number means you are getting a better return for the risk involved.")
+        st.markdown("<br>**Sortino Ratio**\n\nSimilar to Sharpe, but it only factors in 'bad' risk (when the stock price drops), completely ignoring upward price swings.", unsafe_allow_html=True)
     with c3:
-        st.info("**🔗 Beta:** The market magnet. A Beta of 1.0 means the stock moves exactly with the market. > 1 means it's aggressive, < 1 means it's defensive.")
+        st.markdown("**Beta**\n\nShows how closely a stock follows the overall market. A Beta of 1.0 moves exactly with the market; above 1.0 is more reactive, and below 1.0 is more stable.")
     
     st.markdown("---")
     st.markdown(f"### Dataset Overview (Latest Data for All {df['Symbol'].nunique()} Historical Stocks)")
