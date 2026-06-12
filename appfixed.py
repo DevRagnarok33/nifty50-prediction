@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import yfinance as yf
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import os
+import requests
 
 # ── PAGE CONFIG ────────────────────────────────────────
 st.set_page_config(
@@ -21,21 +20,17 @@ def load_data():
     local_path = 'NIFTY50_all.csv'
     if not os.path.exists(local_path):
         try:
-            import requests
             file_id = "1YXM-hBa_2orAI2eMyyE5XE1Qrs4kJtVU"
-            # Step 1 — start download session
-            session = requests.Session()
-            url = "https://drive.google.com/uc?export=download"
+            session  = requests.Session()
+            url      = "https://drive.google.com/uc?export=download"
             response = session.get(url, params={'id': file_id}, stream=True)
-            # Step 2 — handle large file confirmation token
-            token = None
+            token    = None
             for key, value in response.cookies.items():
                 if key.startswith('download_warning'):
                     token = value
                     break
             if token:
                 response = session.get(url, params={'id': file_id, 'confirm': token}, stream=True)
-            # Step 3 — save file
             with open(local_path, 'wb') as f:
                 for chunk in response.iter_content(32768):
                     if chunk:
@@ -43,22 +38,20 @@ def load_data():
         except Exception as e:
             st.error(f"❌ Could not download dataset: {e}")
             return None
+    if not os.path.exists(local_path):
+        st.error("❌ Dataset file not found.")
+        return None
     df = pd.read_csv(local_path)
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values(['Symbol', 'Date']).reset_index(drop=True)
     return df
-    
 
-# ── LOAD MARKET DATA (from CSV, no yfinance needed) ───
+# ── MARKET RETURN FROM CSV (no yfinance) ──────────────
 @st.cache_data
-def load_market(df_json):
-    df = pd.read_json(df_json)
-    df['Date'] = pd.to_datetime(df['Date'])
-    # ✅ Compute market return as equal-weighted average of all 50 stocks
+def load_market(_df):
+    # Equal-weighted average of all 50 stocks as market proxy
     daily = (
-        df.groupby(['Symbol', 'Date'])['Close']
-        .last()
-        .groupby('Date')
+        _df.groupby(['Date'])['Close']
         .mean()
         .pct_change() * 100
     )
@@ -68,34 +61,26 @@ def load_market(df_json):
 
 # ── COMPUTE STATS ──────────────────────────────────────
 @st.cache_data
-def compute_stats(df_json, market_json):
-    df     = pd.read_json(df_json)
-    market = pd.read_json(market_json)
-    df['Date']     = pd.to_datetime(df['Date'])
-    market['Date'] = pd.to_datetime(market['Date'])
-    market = market.set_index('Date')
-
+def compute_stats(_df, _market):
+    market = _market.set_index('Date')
     results = []
-    for symbol in df['Symbol'].unique():
+    for symbol in _df['Symbol'].unique():
         try:
-            s = df[df['Symbol'] == symbol].copy()
+            s = _df[_df['Symbol'] == symbol].copy()
             s['Daily_Return'] = s['Close'].pct_change()
-            s = s.dropna(subset=['Daily_Return'])
-            s = s.set_index('Date')
+            s = s.dropna(subset=['Daily_Return']).set_index('Date')
 
             ann_return  = s['Daily_Return'].mean() * 252 * 100
-            ann_vol     = s['Daily_Return'].std() * np.sqrt(252) * 100
-            sharpe      = (ann_return/100) / (ann_vol/100) if ann_vol != 0 else 0
+            ann_vol     = s['Daily_Return'].std()  * np.sqrt(252) * 100
+            sharpe      = (ann_return / ann_vol) if ann_vol != 0 else 0
             rolling_max = s['Close'].cummax()
             max_dd      = ((s['Close'] - rolling_max) / rolling_max).min() * 100
 
-            combined = s[['Daily_Return']].copy()
-            combined.columns = ['Stock_Return']
+            combined = s[['Daily_Return']].rename(columns={'Daily_Return': 'Stock_Return'})
             combined['Stock_Return'] *= 100
             combined = combined.join(market[['Market_Return']], how='inner').dropna()
 
-            beta = 0
-            corr = 0
+            beta, corr = 0, 0
             if len(combined) > 100:
                 cov  = np.cov(combined['Stock_Return'], combined['Market_Return'])
                 beta = cov[0, 1] / cov[1, 1] if cov[1, 1] != 0 else 0
@@ -118,12 +103,12 @@ def compute_stats(df_json, market_json):
 df = load_data()
 
 if df is None:
-    st.error("❌ NIFTY50_all.csv not found! Please upload it to Colab first.")
-    st.code("from google.colab import files\nfiles.upload()  # upload NIFTY50_all.csv")
+    st.error("❌ Could not load data. Please check your Google Drive link.")
     st.stop()
 
-market = load_market(df.to_json())
-stats  = compute_stats(df.to_json(), market.to_json())
+market = load_market(df)
+stats  = compute_stats(df, market)
+
 # ── BUILD PORTFOLIOS ───────────────────────────────────
 conservative = stats[
     (stats['Ann_Volatility'] < stats['Ann_Volatility'].quantile(0.35)) &
@@ -139,11 +124,7 @@ aggressive = stats[
     stats['Ann_Return'] > stats['Ann_Return'].quantile(0.65)
 ].nlargest(8, 'Ann_Return')
 
-portfolios = {
-    'Conservative': conservative,
-    'Balanced'    : balanced,
-    'Aggressive'  : aggressive
-}
+portfolios = {'Conservative': conservative, 'Balanced': balanced, 'Aggressive': aggressive}
 
 # ── SIDEBAR ────────────────────────────────────────────
 st.sidebar.image(
@@ -210,9 +191,9 @@ elif page == "📊 Stock Analyzer":
     st.markdown("---")
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 8))
-    axes[0].plot(stock['Date'], stock['Close'],    color='steelblue', linewidth=0.8, label='Close Price', alpha=0.7)
-    axes[0].plot(stock['Date'], stock['MA20'],     color='orange',    linewidth=1.5, label='MA20')
-    axes[0].plot(stock['Date'], stock['MA50'],     color='red',       linewidth=1.5, label='MA50')
+    axes[0].plot(stock['Date'], stock['Close'],  color='steelblue', linewidth=0.8, label='Close Price', alpha=0.7)
+    axes[0].plot(stock['Date'], stock['MA20'],   color='orange',    linewidth=1.5, label='MA20')
+    axes[0].plot(stock['Date'], stock['MA50'],   color='red',       linewidth=1.5, label='MA50')
     axes[0].set_title(f'{symbol} — Price with Moving Averages')
     axes[0].set_ylabel('Price (₹)')
     axes[0].legend()
@@ -227,7 +208,6 @@ elif page == "📊 Stock Analyzer":
     st.pyplot(fig)
     plt.close()
 
-    # ML Prediction
     st.markdown("---")
     st.subheader("🤖 ML Price Prediction")
 
@@ -261,8 +241,8 @@ elif page == "📊 Stock Analyzer":
         col3.metric("R²",   f"{r2:.4f}")
 
         fig2, ax = plt.subplots(figsize=(14, 4))
-        ax.plot(y_test.values, color='steelblue', linewidth=1,   label='Actual Price')
-        ax.plot(y_pred,        color='orange',    linewidth=1,   label='Predicted Price', alpha=0.8)
+        ax.plot(y_test.values, color='steelblue', linewidth=1, label='Actual Price')
+        ax.plot(y_pred,        color='orange',    linewidth=1, label='Predicted Price', alpha=0.8)
         ax.set_title(f'{symbol} — Actual vs Predicted Price')
         ax.set_xlabel('Trading Days (Test Set)')
         ax.set_ylabel('Price (₹)')
@@ -294,9 +274,7 @@ elif page == "💼 Portfolio Constructor":
 
     col1, col2, col3 = st.columns(3)
     for col, (name, port), color in zip(
-        [col1, col2, col3],
-        portfolios.items(),
-        ['🟢', '🔵', '🔴']
+        [col1, col2, col3], portfolios.items(), ['🟢', '🔵', '🔴']
     ):
         with col:
             st.markdown(f"### {color} {name}")
@@ -359,10 +337,11 @@ elif page == "⚠️ Risk & Beta Dashboard":
     st.markdown("---")
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    port_colors = ['mediumseagreen', 'steelblue', 'tomato']
 
-    beta_sorted  = stats.sort_values('Beta')
-    colors_beta  = ['tomato' if b > 1.2 else 'steelblue' if b > 0.8 else 'mediumseagreen'
-                    for b in beta_sorted['Beta']]
+    beta_sorted = stats.sort_values('Beta')
+    colors_beta = ['tomato' if b > 1.2 else 'steelblue' if b > 0.8 else 'mediumseagreen'
+                   for b in beta_sorted['Beta']]
     axes[0, 0].barh(beta_sorted['Symbol'], beta_sorted['Beta'], color=colors_beta)
     axes[0, 0].axvline(x=1.0, color='black', linestyle='--', linewidth=1.5, label='Beta=1.0')
     axes[0, 0].set_title('Beta — All Stocks\n(Green=Defensive, Blue=Moderate, Red=Aggressive)')
@@ -382,11 +361,10 @@ elif page == "⚠️ Risk & Beta Dashboard":
     axes[0, 1].set_ylabel('Annual Return %')
     axes[0, 1].grid(True, alpha=0.2)
 
-    port_betas  = [stats[stats['Symbol'].isin(p['Symbol'])]['Beta'].mean()
-                   for p in portfolios.values()]
-    port_names  = list(portfolios.keys())
-    port_colors = ['mediumseagreen', 'steelblue', 'tomato']
-    bars = axes[1, 0].bar(port_names, port_betas, color=port_colors, alpha=0.8, edgecolor='white')
+    port_betas = [stats[stats['Symbol'].isin(p['Symbol'])]['Beta'].mean()
+                  for p in portfolios.values()]
+    bars = axes[1, 0].bar(list(portfolios.keys()), port_betas,
+                          color=port_colors, alpha=0.8, edgecolor='white')
     axes[1, 0].axhline(y=1.0, color='black', linestyle='--', linewidth=1.5, label='Market Beta=1.0')
     for bar, val in zip(bars, port_betas):
         axes[1, 0].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
@@ -398,9 +376,8 @@ elif page == "⚠️ Risk & Beta Dashboard":
 
     market_changes = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
     for (name, _), beta, color in zip(portfolios.items(), port_betas, port_colors):
-        sim = [m * beta for m in market_changes]
-        axes[1, 1].plot(market_changes, sim, 'o-', linewidth=2,
-                        label=f'{name} (β={beta:.2f})', color=color)
+        axes[1, 1].plot(market_changes, [m * beta for m in market_changes],
+                        'o-', linewidth=2, label=f'{name} (β={beta:.2f})', color=color)
     axes[1, 1].plot(market_changes, market_changes, 'k--', linewidth=1, alpha=0.5, label='Market')
     axes[1, 1].axhline(y=0, color='black', linewidth=0.5)
     axes[1, 1].axvline(x=0, color='black', linewidth=0.5)
@@ -443,33 +420,24 @@ elif page == "🔍 Explainable Recommendations":
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     syms      = port['Symbol'].values
     beta_vals = [stats[stats['Symbol'] == s]['Beta'].values[0]
-                 if len(stats[stats['Symbol'] == s]) > 0 else 0
-                 for s in syms]
+                 if len(stats[stats['Symbol'] == s]) > 0 else 0 for s in syms]
 
     axes[0, 0].barh(syms, port['Ann_Return'].values, color='mediumseagreen', alpha=0.8)
     axes[0, 0].axvline(x=stats['Ann_Return'].mean(), color='red', linestyle='--', label='Avg')
-    axes[0, 0].set_title('Annual Return')
-    axes[0, 0].legend()
-    axes[0, 0].grid(True, alpha=0.3)
+    axes[0, 0].set_title('Annual Return'); axes[0, 0].legend(); axes[0, 0].grid(True, alpha=0.3)
 
     axes[0, 1].barh(syms, port['Ann_Volatility'].values, color='steelblue', alpha=0.8)
     axes[0, 1].axvline(x=stats['Ann_Volatility'].mean(), color='red', linestyle='--', label='Avg')
-    axes[0, 1].set_title('Volatility (lower = safer)')
-    axes[0, 1].legend()
-    axes[0, 1].grid(True, alpha=0.3)
+    axes[0, 1].set_title('Volatility (lower = safer)'); axes[0, 1].legend(); axes[0, 1].grid(True, alpha=0.3)
 
     axes[1, 0].barh(syms, port['Sharpe_Ratio'].values, color='mediumpurple', alpha=0.8)
     axes[1, 0].axvline(x=1.0, color='red', linestyle='--', label='Sharpe=1.0')
     axes[1, 0].axvline(x=stats['Sharpe_Ratio'].mean(), color='orange', linestyle=':', label='Avg')
-    axes[1, 0].set_title('Sharpe Ratio')
-    axes[1, 0].legend()
-    axes[1, 0].grid(True, alpha=0.3)
+    axes[1, 0].set_title('Sharpe Ratio'); axes[1, 0].legend(); axes[1, 0].grid(True, alpha=0.3)
 
     axes[1, 1].barh(syms, beta_vals, color='darkorange', alpha=0.8)
     axes[1, 1].axvline(x=1.0, color='red', linestyle='--', label='Market Beta=1.0')
-    axes[1, 1].set_title('Beta (lower = more defensive)')
-    axes[1, 1].legend()
-    axes[1, 1].grid(True, alpha=0.3)
+    axes[1, 1].set_title('Beta (lower = more defensive)'); axes[1, 1].legend(); axes[1, 1].grid(True, alpha=0.3)
 
     plt.suptitle(f'Explainable Recommendations — {selected} Portfolio',
                  fontsize=13, fontweight='bold')
@@ -477,22 +445,20 @@ elif page == "🔍 Explainable Recommendations":
     st.pyplot(fig)
     plt.close()
 
-    # Radar chart
     st.markdown("---")
     st.subheader("Portfolio Comparison — Radar Chart")
-    radar_data = {}
-    for name, p in portfolios.items():
-        radar_data[name] = [
-            p['Ann_Return'].mean(),
-            100 - p['Ann_Volatility'].mean(),
-            p['Sharpe_Ratio'].mean() * 100,
-            100 + p['Max_Drawdown'].mean()
-        ]
 
-    all_vals       = [v for vals in radar_data.values() for v in vals]
-    min_v, max_v   = min(all_vals), max(all_vals)
-    normalized     = {k: [(v - min_v) / (max_v - min_v) * 100 for v in vals]
-                      for k, vals in radar_data.items()}
+    radar_data = {name: [
+        p['Ann_Return'].mean(),
+        100 - p['Ann_Volatility'].mean(),
+        p['Sharpe_Ratio'].mean() * 100,
+        100 + p['Max_Drawdown'].mean()
+    ] for name, p in portfolios.items()}
+
+    all_vals     = [v for vals in radar_data.values() for v in vals]
+    min_v, max_v = min(all_vals), max(all_vals)
+    normalized   = {k: [(v - min_v) / (max_v - min_v) * 100 for v in vals]
+                    for k, vals in radar_data.items()}
 
     labels   = ['Annual\nReturn', 'Safety', 'Sharpe\nRatio', 'Drawdown\nProtection']
     num_vars = len(labels)
@@ -500,8 +466,7 @@ elif page == "🔍 Explainable Recommendations":
     angles  += angles[:1]
 
     fig2, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-    colors   = ['mediumseagreen', 'steelblue', 'tomato']
-    for (name, values), color in zip(normalized.items(), colors):
+    for (name, values), color in zip(normalized.items(), ['mediumseagreen', 'steelblue', 'tomato']):
         vals = values + values[:1]
         ax.plot(angles, vals, 'o-', linewidth=2.5, label=name, color=color)
         ax.fill(angles, vals, alpha=0.15, color=color)
