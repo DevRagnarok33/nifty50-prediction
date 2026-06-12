@@ -55,17 +55,32 @@ def load_market():
     try:
         nifty = yf.download("^NSEI", start="2000-01-01", end="2021-04-30",
                             progress=False, auto_adjust=True)
-        # ✅ Fix for newer yfinance MultiIndex columns
+        if nifty.empty:
+            raise ValueError("Empty data returned")
+        # Flatten MultiIndex columns (newer yfinance)
         if isinstance(nifty.columns, pd.MultiIndex):
             nifty.columns = nifty.columns.get_level_values(0)
         nifty = nifty.reset_index()
+        # ✅ Handle different date column names across yfinance versions
+        date_col = None
+        for col in ['Date', 'Datetime', 'index', 'date']:
+            if col in nifty.columns:
+                date_col = col
+                break
+        if date_col is None:
+            raise ValueError("No date column found")
+        nifty = nifty.rename(columns={date_col: 'Date'})
         nifty['Date'] = pd.to_datetime(nifty['Date'])
         nifty['Market_Return'] = nifty['Close'].pct_change() * 100
         return nifty[['Date', 'Market_Return']].dropna().reset_index(drop=True)
     except Exception as e:
         st.warning(f"Could not download market data: {e}. Using fallback.")
-        return pd.DataFrame({'Date': pd.date_range('2000-01-01', '2021-04-30', freq='B'),
-                             'Market_Return': np.random.normal(0.03, 1.0, 5543)})
+        # ✅ Fix: use len(dates) instead of hardcoded 5543
+        dates = pd.date_range('2000-01-01', '2021-04-30', freq='B')
+        return pd.DataFrame({
+            'Date': dates,
+            'Market_Return': np.random.normal(0.03, 1.0, len(dates))
+        })
 
 # ── COMPUTE STATS ──────────────────────────────────────
 @st.cache_data
