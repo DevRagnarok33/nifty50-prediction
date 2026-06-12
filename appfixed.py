@@ -73,6 +73,12 @@ def compute_stats(_df, _market):
             ann_return  = s['Daily_Return'].mean() * 252 * 100
             ann_vol     = s['Daily_Return'].std()  * np.sqrt(252) * 100
             sharpe      = (ann_return / ann_vol) if ann_vol != 0 else 0
+            
+            # ── NEW: SORTINO RATIO LOGIC ──
+            downside_returns = s[s['Daily_Return'] < 0]['Daily_Return']
+            down_vol = downside_returns.std() * np.sqrt(252) * 100 if len(downside_returns) > 1 else 0
+            sortino = (ann_return / down_vol) if down_vol != 0 else 0
+
             rolling_max = s['Close'].cummax()
             max_dd      = ((s['Close'] - rolling_max) / rolling_max).min() * 100
 
@@ -91,6 +97,7 @@ def compute_stats(_df, _market):
                 'Ann_Return'    : round(ann_return, 2),
                 'Ann_Volatility': round(ann_vol, 2),
                 'Sharpe_Ratio'  : round(sharpe, 3),
+                'Sortino_Ratio' : round(sortino, 3),  # Added to results
                 'Max_Drawdown'  : round(max_dd, 2),
                 'Beta'          : round(beta, 3),
                 'Correlation'   : round(corr, 3)
@@ -127,7 +134,6 @@ aggressive = stats[
 portfolios = {'Conservative': conservative, 'Balanced': balanced, 'Aggressive': aggressive}
 
 # ── SIDEBAR ────────────────────────────────────────────
-# Replaced broken Wikipedia logo with a stable stock market image
 st.sidebar.image(
     "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=320&auto=format&fit=crop", 
     use_container_width=True
@@ -171,7 +177,7 @@ if page == "🏠 Home":
     st.dataframe(df[['Date', 'Symbol', 'Open', 'High', 'Low', 'Close', 'Volume']].head(10))
 
 # ══════════════════════════════════════════════════════
-# PAGE 2 — STOCK ANALYZER (INTERACTIVE)
+# PAGE 2 — STOCK ANALYZER
 # ══════════════════════════════════════════════════════
 elif page == "📊 Stock Analyzer":
     st.title("📊 Stock Analyzer")
@@ -191,7 +197,6 @@ elif page == "📊 Stock Analyzer":
 
     st.markdown("---")
 
-    # Interactive Price & MA Chart
     fig_price = go.Figure()
     fig_price.add_trace(go.Scatter(x=stock['Date'], y=stock['Close'], mode='lines', name='Close Price', line=dict(color='steelblue', width=1.5)))
     fig_price.add_trace(go.Scatter(x=stock['Date'], y=stock['MA20'], mode='lines', name='MA20', line=dict(color='orange', width=2)))
@@ -199,7 +204,6 @@ elif page == "📊 Stock Analyzer":
     fig_price.update_layout(title=f'{symbol} — Price with Moving Averages', xaxis_title='Date', yaxis_title='Price (₹)', hovermode="x unified", height=450)
     st.plotly_chart(fig_price, use_container_width=True)
 
-    # Interactive Volatility Chart
     fig_vol = px.line(stock, x='Date', y='Volatility', title=f'{symbol} — 30-Day Rolling Volatility', height=350)
     fig_vol.update_traces(line_color='red', line_width=1.5)
     fig_vol.update_layout(hovermode="x unified", xaxis_title="Date", yaxis_title="Volatility")
@@ -232,7 +236,6 @@ elif page == "📊 Stock Analyzer":
         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
         r2   = r2_score(y_test, y_pred)
         
-        # Directional Accuracy Logic
         current_prices_test = stock_clean['Close'].iloc[split:].values
         actual_direction = np.sign(y_test.values - current_prices_test)
         predicted_direction = np.sign(y_pred - current_prices_test)
@@ -244,7 +247,6 @@ elif page == "📊 Stock Analyzer":
         col3.metric("R²",   f"{r2:.4f}")
         col4.metric("Dir. Accuracy", f"{directional_accuracy:.1f}%")
 
-        # Interactive Actual vs Predicted Chart
         ml_df = pd.DataFrame({'Trading Days (Test Set)': range(len(y_test)), 'Actual Price': y_test.values, 'Predicted Price': y_pred})
         fig_ml = go.Figure()
         fig_ml.add_trace(go.Scatter(x=ml_df['Trading Days (Test Set)'], y=ml_df['Actual Price'], mode='lines', name='Actual Price', line=dict(color='steelblue', width=2)))
@@ -260,7 +262,6 @@ elif page == "📊 Stock Analyzer":
         change     = next_price - last_price
         pct_change = (change / last_price) * 100
         
-        # Explicit Direction Indicator
         direction_label = "Upward 📈" if change > 0 else "Downward 📉"
 
         col1, col2, col3, col4 = st.columns(4)
@@ -271,7 +272,7 @@ elif page == "📊 Stock Analyzer":
         st.caption("⚠️ This prediction is based on historical patterns only. Not financial advice.")
 
 # ══════════════════════════════════════════════════════
-# PAGE 3 — PORTFOLIO CONSTRUCTOR (INTERACTIVE)
+# PAGE 3 — PORTFOLIO CONSTRUCTOR
 # ══════════════════════════════════════════════════════
 elif page == "💼 Portfolio Constructor":
     st.title("💼 Portfolio Constructor")
@@ -304,12 +305,13 @@ elif page == "💼 Portfolio Constructor":
     st.markdown("---")
     selected = st.selectbox("View detailed stock list", list(portfolios.keys()))
     st.dataframe(
-        portfolios[selected][['Symbol', 'Ann_Return', 'Ann_Volatility', 'Sharpe_Ratio', 'Max_Drawdown', 'Beta']]
+        portfolios[selected][['Symbol', 'Ann_Return', 'Ann_Volatility', 'Sharpe_Ratio', 'Sortino_Ratio', 'Max_Drawdown', 'Beta']]
         .reset_index(drop=True)
         .style.format({
             'Ann_Return'    : '{:.2f}%',
             'Ann_Volatility': '{:.2f}%',
             'Sharpe_Ratio'  : '{:.3f}',
+            'Sortino_Ratio' : '{:.3f}',  # Formatting new metric
             'Max_Drawdown'  : '{:.2f}%',
             'Beta'          : '{:.3f}'
         }),
@@ -317,7 +319,7 @@ elif page == "💼 Portfolio Constructor":
     )
 
 # ══════════════════════════════════════════════════════
-# PAGE 4 — RISK & BETA DASHBOARD (INTERACTIVE)
+# PAGE 4 — RISK & BETA DASHBOARD
 # ══════════════════════════════════════════════════════
 elif page == "⚠️ Risk & Beta Dashboard":
     st.title("⚠️ Risk & Beta Dashboard")
@@ -409,7 +411,7 @@ elif page == "⚠️ Risk & Beta Dashboard":
         st.plotly_chart(fig4, use_container_width=True)
 
 # ══════════════════════════════════════════════════════
-# PAGE 5 — EXPLAINABLE RECOMMENDATIONS (INTERACTIVE)
+# PAGE 5 — EXPLAINABLE RECOMMENDATIONS
 # ══════════════════════════════════════════════════════
 elif page == "🔍 Explainable Recommendations":
     st.title("🔍 Explainable Recommendations")
@@ -418,7 +420,6 @@ elif page == "🔍 Explainable Recommendations":
     selected = st.selectbox("Select Portfolio", list(portfolios.keys()))
     port     = portfolios[selected].copy()
     
-    # Map Beta to the portfolio dataframe for easier Plotly usage
     port['Beta'] = [stats[stats['Symbol'] == s]['Beta'].values[0] if len(stats[stats['Symbol'] == s]) > 0 else 0 for s in port['Symbol']]
 
     st.markdown("---")
@@ -426,15 +427,16 @@ elif page == "🔍 Explainable Recommendations":
 
     for _, row in port.iterrows():
         with st.expander(f"📌 {row['Symbol']} — Why selected?"):
-            col1, col2, col3, col4 = st.columns(4)
+            # Expanded to 5 columns to include Sortino Ratio
+            col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Annual Return", f"{row['Ann_Return']:.1f}%")
             col2.metric("Volatility",    f"{row['Ann_Volatility']:.1f}%")
             col3.metric("Sharpe Ratio",  f"{row['Sharpe_Ratio']:.3f}")
-            col4.metric("Beta",          f"{row['Beta']:.3f}")
+            col4.metric("Sortino Ratio", f"{row['Sortino_Ratio']:.3f}")
+            col5.metric("Beta",          f"{row['Beta']:.3f}")
 
     st.markdown("---")
     
-    # 2x2 Interactive Bar Charts
     bar_col1, bar_col2 = st.columns(2)
     bar_col3, bar_col4 = st.columns(2)
     
@@ -480,7 +482,6 @@ elif page == "🔍 Explainable Recommendations":
 
     labels   = ['Annual Return', 'Safety', 'Sharpe Ratio', 'Drawdown Protection']
     
-    # Interactive Plotly Radar Chart
     fig_radar = go.Figure()
     
     colors = ['mediumseagreen', 'steelblue', 'tomato']
