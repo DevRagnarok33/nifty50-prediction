@@ -15,6 +15,19 @@ st.set_page_config(
     layout="wide"
 )
 
+# ── TOOLTIPS & DEFINITIONS ─────────────────────────────
+TOOLTIPS = {
+    "Volatility": "A measure of how much a stock's price fluctuates. Higher volatility means higher risk.",
+    "Sharpe": "Measures return for every unit of risk. A ratio > 1.0 is generally considered good.",
+    "Sortino": "Similar to Sharpe, but only penalizes 'bad' volatility (downward price drops). Higher is better.",
+    "Drawdown": "The largest historical percentage drop in a stock's price from its peak to its lowest point.",
+    "Beta": "Measures how sensitive a stock is to the overall market. Beta = 1.0 moves exactly with the market. Beta > 1 is aggressive. Beta < 1 is defensive.",
+    "MAE": "Mean Absolute Error: The average error between the predicted price and actual price in Rupees.",
+    "RMSE": "Root Mean Squared Error: Similar to MAE, but gives a heavier penalty to very large prediction errors.",
+    "R2": "R-Squared: Measures how well the ML model explains the actual price movements. 1.0 is a perfect prediction.",
+    "DirAcc": "Directional Accuracy: The percentage of time the model correctly guessed if the stock would go UP or DOWN."
+}
+
 # ── LOAD CSV DATA ──────────────────────────────────────
 @st.cache_data
 def load_data():
@@ -74,7 +87,6 @@ def compute_stats(_df, _market):
             ann_vol     = s['Daily_Return'].std()  * np.sqrt(252) * 100
             sharpe      = (ann_return / ann_vol) if ann_vol != 0 else 0
             
-            # ── NEW: SORTINO RATIO LOGIC ──
             downside_returns = s[s['Daily_Return'] < 0]['Daily_Return']
             down_vol = downside_returns.std() * np.sqrt(252) * 100 if len(downside_returns) > 1 else 0
             sortino = (ann_return / down_vol) if down_vol != 0 else 0
@@ -97,7 +109,7 @@ def compute_stats(_df, _market):
                 'Ann_Return'    : round(ann_return, 2),
                 'Ann_Volatility': round(ann_vol, 2),
                 'Sharpe_Ratio'  : round(sharpe, 3),
-                'Sortino_Ratio' : round(sortino, 3),  # Added to results
+                'Sortino_Ratio' : round(sortino, 3),
                 'Max_Drawdown'  : round(max_dd, 2),
                 'Beta'          : round(beta, 3),
                 'Correlation'   : round(corr, 3)
@@ -193,7 +205,7 @@ elif page == "📊 Stock Analyzer":
     col1.metric("Current Price",    f"₹{stock['Close'].iloc[-1]:.2f}")
     col2.metric("52W High",         f"₹{stock['Close'].tail(252).max():.2f}")
     col3.metric("52W Low",          f"₹{stock['Close'].tail(252).min():.2f}")
-    col4.metric("Avg Daily Return", f"{stock['Daily_Return'].mean():.3f}%")
+    col4.metric("Avg Daily Return", f"{stock['Daily_Return'].mean():.3f}%", help="The average daily percentage change in the stock's price.")
 
     st.markdown("---")
 
@@ -242,10 +254,10 @@ elif page == "📊 Stock Analyzer":
         directional_accuracy = np.mean(actual_direction == predicted_direction) * 100
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("MAE",  f"₹{mae:.2f}")
-        col2.metric("RMSE", f"₹{rmse:.2f}")
-        col3.metric("R²",   f"{r2:.4f}")
-        col4.metric("Dir. Accuracy", f"{directional_accuracy:.1f}%")
+        col1.metric("MAE",  f"₹{mae:.2f}", help=TOOLTIPS["MAE"])
+        col2.metric("RMSE", f"₹{rmse:.2f}", help=TOOLTIPS["RMSE"])
+        col3.metric("R²",   f"{r2:.4f}", help=TOOLTIPS["R2"])
+        col4.metric("Dir. Accuracy", f"{directional_accuracy:.1f}%", help=TOOLTIPS["DirAcc"])
 
         ml_df = pd.DataFrame({'Trading Days (Test Set)': range(len(y_test)), 'Actual Price': y_test.values, 'Predicted Price': y_pred})
         fig_ml = go.Figure()
@@ -268,7 +280,7 @@ elif page == "📊 Stock Analyzer":
         col1.metric("Last Known Price",     f"₹{last_price:.2f}")
         col2.metric("Predicted Next Price", f"₹{next_price:.2f}", f"{change:+.2f}")
         col3.metric("Expected Change",      f"{pct_change:+.2f}%")
-        col4.metric("Predicted Direction",  direction_label)
+        col4.metric("Predicted Direction",  direction_label, help="The forecasted overall trend (Up/Down) for the next trading day.")
         st.caption("⚠️ This prediction is based on historical patterns only. Not financial advice.")
 
 # ══════════════════════════════════════════════════════
@@ -283,11 +295,11 @@ elif page == "💼 Portfolio Constructor":
     ):
         with col:
             st.markdown(f"### {color} {name}")
-            st.metric("Avg Annual Return", f"{port['Ann_Return'].mean():.1f}%")
-            st.metric("Avg Volatility",    f"{port['Ann_Volatility'].mean():.1f}%")
-            st.metric("Avg Sharpe Ratio",  f"{port['Sharpe_Ratio'].mean():.3f}")
-            st.metric("Avg Max Drawdown",  f"{port['Max_Drawdown'].mean():.1f}%")
-            st.metric("Avg Beta",          f"{port['Beta'].mean():.3f}")
+            st.metric("Avg Annual Return", f"{port['Ann_Return'].mean():.1f}%", help="The average expected yearly return.")
+            st.metric("Avg Volatility",    f"{port['Ann_Volatility'].mean():.1f}%", help=TOOLTIPS["Volatility"])
+            st.metric("Avg Sharpe Ratio",  f"{port['Sharpe_Ratio'].mean():.3f}", help=TOOLTIPS["Sharpe"])
+            st.metric("Avg Max Drawdown",  f"{port['Max_Drawdown'].mean():.1f}%", help=TOOLTIPS["Drawdown"])
+            st.metric("Avg Beta",          f"{port['Beta'].mean():.3f}", help=TOOLTIPS["Beta"])
 
     st.markdown("---")
     st.markdown("### Portfolio Allocations by Investor Profile")
@@ -311,7 +323,7 @@ elif page == "💼 Portfolio Constructor":
             'Ann_Return'    : '{:.2f}%',
             'Ann_Volatility': '{:.2f}%',
             'Sharpe_Ratio'  : '{:.3f}',
-            'Sortino_Ratio' : '{:.3f}',  # Formatting new metric
+            'Sortino_Ratio' : '{:.3f}',  
             'Max_Drawdown'  : '{:.2f}%',
             'Beta'          : '{:.3f}'
         }),
@@ -330,10 +342,10 @@ elif page == "⚠️ Risk & Beta Dashboard":
     best_sh  = stats.loc[stats['Sharpe_Ratio'].idxmax()]
     worst_dd = stats.loc[stats['Max_Drawdown'].idxmin()]
 
-    col1.metric("Safest Stock",   safest['Symbol'],   f"Vol: {safest['Ann_Volatility']:.1f}%")
-    col2.metric("Riskiest Stock", riskiest['Symbol'], f"Vol: {riskiest['Ann_Volatility']:.1f}%")
-    col3.metric("Best Sharpe",    best_sh['Symbol'],  f"Sharpe: {best_sh['Sharpe_Ratio']:.3f}")
-    col4.metric("Worst Drawdown", worst_dd['Symbol'], f"DD: {worst_dd['Max_Drawdown']:.1f}%")
+    col1.metric("Safest Stock",   safest['Symbol'],   f"Vol: {safest['Ann_Volatility']:.1f}%", help=TOOLTIPS["Volatility"])
+    col2.metric("Riskiest Stock", riskiest['Symbol'], f"Vol: {riskiest['Ann_Volatility']:.1f}%", help=TOOLTIPS["Volatility"])
+    col3.metric("Best Sharpe",    best_sh['Symbol'],  f"Sharpe: {best_sh['Sharpe_Ratio']:.3f}", help=TOOLTIPS["Sharpe"])
+    col4.metric("Worst Drawdown", worst_dd['Symbol'], f"DD: {worst_dd['Max_Drawdown']:.1f}%", help=TOOLTIPS["Drawdown"])
 
     st.markdown("---")
 
@@ -427,13 +439,12 @@ elif page == "🔍 Explainable Recommendations":
 
     for _, row in port.iterrows():
         with st.expander(f"📌 {row['Symbol']} — Why selected?"):
-            # Expanded to 5 columns to include Sortino Ratio
             col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("Annual Return", f"{row['Ann_Return']:.1f}%")
-            col2.metric("Volatility",    f"{row['Ann_Volatility']:.1f}%")
-            col3.metric("Sharpe Ratio",  f"{row['Sharpe_Ratio']:.3f}")
-            col4.metric("Sortino Ratio", f"{row['Sortino_Ratio']:.3f}")
-            col5.metric("Beta",          f"{row['Beta']:.3f}")
+            col1.metric("Annual Return", f"{row['Ann_Return']:.1f}%", help="The expected yearly return based on historical data.")
+            col2.metric("Volatility",    f"{row['Ann_Volatility']:.1f}%", help=TOOLTIPS["Volatility"])
+            col3.metric("Sharpe Ratio",  f"{row['Sharpe_Ratio']:.3f}", help=TOOLTIPS["Sharpe"])
+            col4.metric("Sortino Ratio", f"{row['Sortino_Ratio']:.3f}", help=TOOLTIPS["Sortino"])
+            col5.metric("Beta",          f"{row['Beta']:.3f}", help=TOOLTIPS["Beta"])
 
     st.markdown("---")
     
