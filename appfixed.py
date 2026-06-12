@@ -161,7 +161,7 @@ page = st.sidebar.radio("Navigate", [
 ])
 
 # ══════════════════════════════════════════════════════
-# PAGE 1 — HOME (WITH CHEAT SHEET)
+# PAGE 1 — HOME
 # ══════════════════════════════════════════════════════
 if page == "🏠 Home":
     st.title("📈 NIFTY-50 Investment Intelligence Platform")
@@ -176,7 +176,6 @@ if page == "🏠 Home":
 
     st.markdown("---")
     
-    # ── NEW: METRIC CHEAT SHEET ──
     st.markdown("### 📖 The Beginner's Metric Cheat Sheet")
     st.write("We don't hide the complex math on this platform, but we do make it easy to read. Keep an eye out for these terms as you explore:")
     c1, c2, c3 = st.columns(3)
@@ -190,7 +189,7 @@ if page == "🏠 Home":
         st.info("**🔗 Beta:** The market magnet. A Beta of 1.0 means the stock moves exactly with the market. > 1 means it's aggressive, < 1 means it's defensive.")
     
     st.markdown("---")
-    st.markdown("### Dataset Overview (Latest Data for All 50 Stocks)")
+    st.markdown(f"### Dataset Overview (Latest Data for All {df['Symbol'].nunique()} Historical Stocks)")
     latest_data = df.groupby('Symbol').last().reset_index()
     st.dataframe(
         latest_data[['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume']],
@@ -226,7 +225,6 @@ elif page == "📊 Stock Analyzer":
     fig_price.update_layout(title=f'{symbol} — Price with Moving Averages', xaxis_title='Date', yaxis_title='Price (₹)', hovermode="x unified", height=450)
     st.plotly_chart(fig_price, use_container_width=True)
 
-    # ── PROGRESSIVE DISCLOSURE: Hide Volatility Chart ──
     with st.expander("📉 View Rolling Volatility Chart"):
         fig_vol = px.line(stock, x='Date', y='Volatility', title=f'{symbol} — 30-Day Rolling Volatility', height=350)
         fig_vol.update_traces(line_color='red', line_width=1.5)
@@ -271,7 +269,6 @@ elif page == "📊 Stock Analyzer":
         col3.metric("R²",   f"{r2:.4f}", help=TOOLTIPS["R2"])
         col4.metric("Dir. Accuracy", f"{directional_accuracy:.1f}%", help=TOOLTIPS["DirAcc"])
 
-        # ── PROGRESSIVE DISCLOSURE: Hide Actual vs Pred Chart ──
         with st.expander("🔬 View Model Accuracy Graph"):
             ml_df = pd.DataFrame({'Trading Days (Test Set)': range(len(y_test)), 'Actual Price': y_test.values, 'Predicted Price': y_pred})
             fig_ml = go.Figure()
@@ -298,7 +295,7 @@ elif page == "📊 Stock Analyzer":
         st.caption("⚠️ This prediction is based on historical patterns only. Not financial advice.")
 
 # ══════════════════════════════════════════════════════
-# PAGE 3 — PORTFOLIO CONSTRUCTOR (PROGRESSIVE DISCLOSURE)
+# PAGE 3 — PORTFOLIO CONSTRUCTOR
 # ══════════════════════════════════════════════════════
 elif page == "💼 Portfolio Constructor":
     st.title("💼 Portfolio Constructor")
@@ -318,7 +315,6 @@ elif page == "💼 Portfolio Constructor":
 
     st.markdown("---")
     
-    # ── PROGRESSIVE DISCLOSURE: Hide the Pie Charts and Dataframes ──
     with st.expander("📊 View Visual Allocations & Deep Dive Data", expanded=False):
         st.markdown("### Portfolio Allocations by Investor Profile")
         pie_cols = st.columns(3)
@@ -348,7 +344,7 @@ elif page == "💼 Portfolio Constructor":
         )
 
 # ══════════════════════════════════════════════════════
-# PAGE 4 — RISK & BETA DASHBOARD (PROGRESSIVE DISCLOSURE)
+# PAGE 4 — RISK & BETA DASHBOARD
 # ══════════════════════════════════════════════════════
 elif page == "⚠️ Risk & Beta Dashboard":
     st.title("⚠️ Risk & Beta Dashboard")
@@ -367,7 +363,6 @@ elif page == "⚠️ Risk & Beta Dashboard":
 
     st.markdown("---")
 
-    # ── PROGRESSIVE DISCLOSURE: Hide the complex charts ──
     with st.expander("📈 Explore Advanced Risk Charts (Beta, Sharpe, Simulations)", expanded=False):
         row1_col1, row1_col2 = st.columns(2)
         row2_col1, row2_col2 = st.columns(2)
@@ -467,7 +462,6 @@ elif page == "🔍 Explainable Recommendations":
 
     st.markdown("---")
     
-    # ── PROGRESSIVE DISCLOSURE: Hide Visual Comparisons ──
     with st.expander("🔬 View Visual Market Comparisons (Bar & Radar Charts)", expanded=False):
         bar_col1, bar_col2 = st.columns(2)
         bar_col3, bar_col4 = st.columns(2)
