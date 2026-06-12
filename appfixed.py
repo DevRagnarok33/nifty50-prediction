@@ -18,16 +18,21 @@ st.set_page_config(
 # ── LOAD CSV DATA ──────────────────────────────────────
 @st.cache_data
 def load_data():
-    # ✅ Load from Google Drive if CSV not found locally
     local_path = 'NIFTY50_all.csv'
-    
     if not os.path.exists(local_path):
-        import gdown
-        # 🔁 Replace with YOUR file ID from Google Drive
-        file_id = "PASTE_YOUR_FILE_ID_HERE"
-        url = f"https://drive.google.com/uc?id={file_id}"
-        gdown.download(url, local_path, quiet=False)
-    
+        try:
+            import gdown
+            file_id = "1YXM-hBa_2orAI2eMyyE5XE1Qrs4kJtVU"
+            # ✅ fuzzy=True handles large file virus-scan warnings from Google Drive
+            url = f"https://drive.google.com/uc?id={file_id}&export=download&confirm=t"
+            gdown.download(url, local_path, quiet=False, fuzzy=True)
+        except Exception as e:
+            st.error(f"❌ Could not download dataset: {e}")
+            st.info("Make sure the file is shared as 'Anyone with the link' on Google Drive.")
+            return None
+    if not os.path.exists(local_path):
+        st.error("❌ Dataset file not found.")
+        return None
     df = pd.read_csv(local_path)
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values(['Symbol', 'Date']).reset_index(drop=True)
