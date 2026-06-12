@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import os
@@ -51,7 +50,6 @@ def load_data():
 # ── MARKET RETURN FROM CSV (no yfinance) ──────────────
 @st.cache_data
 def load_market(_df):
-    # Equal-weighted average of all 50 stocks as market proxy
     daily = (
         _df.groupby(['Date'])['Close']
         .mean()
@@ -172,7 +170,7 @@ if page == "🏠 Home":
     st.dataframe(df[['Date', 'Symbol', 'Open', 'High', 'Low', 'Close', 'Volume']].head(10))
 
 # ══════════════════════════════════════════════════════
-# PAGE 2 — STOCK ANALYZER
+# PAGE 2 — STOCK ANALYZER (INTERACTIVE)
 # ══════════════════════════════════════════════════════
 elif page == "📊 Stock Analyzer":
     st.title("📊 Stock Analyzer")
@@ -192,23 +190,19 @@ elif page == "📊 Stock Analyzer":
 
     st.markdown("---")
 
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8))
-    axes[0].plot(stock['Date'], stock['Close'],  color='steelblue', linewidth=0.8, label='Close Price', alpha=0.7)
-    axes[0].plot(stock['Date'], stock['MA20'],   color='orange',    linewidth=1.5, label='MA20')
-    axes[0].plot(stock['Date'], stock['MA50'],   color='red',       linewidth=1.5, label='MA50')
-    axes[0].set_title(f'{symbol} — Price with Moving Averages')
-    axes[0].set_ylabel('Price (₹)')
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
+    # Interactive Price & MA Chart
+    fig_price = go.Figure()
+    fig_price.add_trace(go.Scatter(x=stock['Date'], y=stock['Close'], mode='lines', name='Close Price', line=dict(color='steelblue', width=1.5)))
+    fig_price.add_trace(go.Scatter(x=stock['Date'], y=stock['MA20'], mode='lines', name='MA20', line=dict(color='orange', width=2)))
+    fig_price.add_trace(go.Scatter(x=stock['Date'], y=stock['MA50'], mode='lines', name='MA50', line=dict(color='red', width=2)))
+    fig_price.update_layout(title=f'{symbol} — Price with Moving Averages', xaxis_title='Date', yaxis_title='Price (₹)', hovermode="x unified", height=450)
+    st.plotly_chart(fig_price, use_container_width=True)
 
-    axes[1].plot(stock['Date'], stock['Volatility'], color='red', linewidth=1)
-    axes[1].set_title(f'{symbol} — 30-Day Rolling Volatility')
-    axes[1].set_ylabel('Volatility')
-    axes[1].set_xlabel('Year')
-    axes[1].grid(True, alpha=0.3)
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
+    # Interactive Volatility Chart
+    fig_vol = px.line(stock, x='Date', y='Volatility', title=f'{symbol} — 30-Day Rolling Volatility', height=350)
+    fig_vol.update_traces(line_color='red', line_width=1.5)
+    fig_vol.update_layout(hovermode="x unified", xaxis_title="Date", yaxis_title="Volatility")
+    st.plotly_chart(fig_vol, use_container_width=True)
 
     st.markdown("---")
     st.subheader("🤖 ML Price Prediction")
@@ -242,17 +236,13 @@ elif page == "📊 Stock Analyzer":
         col2.metric("RMSE", f"₹{rmse:.2f}")
         col3.metric("R²",   f"{r2:.4f}")
 
-        fig2, ax = plt.subplots(figsize=(14, 4))
-        ax.plot(y_test.values, color='steelblue', linewidth=1, label='Actual Price')
-        ax.plot(y_pred,        color='orange',    linewidth=1, label='Predicted Price', alpha=0.8)
-        ax.set_title(f'{symbol} — Actual vs Predicted Price')
-        ax.set_xlabel('Trading Days (Test Set)')
-        ax.set_ylabel('Price (₹)')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        st.pyplot(fig2)
-        plt.close()
+        # Interactive Actual vs Predicted Chart
+        ml_df = pd.DataFrame({'Trading Days (Test Set)': range(len(y_test)), 'Actual Price': y_test.values, 'Predicted Price': y_pred})
+        fig_ml = go.Figure()
+        fig_ml.add_trace(go.Scatter(x=ml_df['Trading Days (Test Set)'], y=ml_df['Actual Price'], mode='lines', name='Actual Price', line=dict(color='steelblue', width=2)))
+        fig_ml.add_trace(go.Scatter(x=ml_df['Trading Days (Test Set)'], y=ml_df['Predicted Price'], mode='lines', name='Predicted Price', line=dict(color='orange', width=2, dash='dot')))
+        fig_ml.update_layout(title=f'{symbol} — Actual vs Predicted Price', xaxis_title='Trading Days (Test Set)', yaxis_title='Price (₹)', hovermode="x unified", height=400)
+        st.plotly_chart(fig_ml, use_container_width=True)
 
         st.markdown("---")
         st.subheader("🔮 Next Day Prediction")
@@ -269,7 +259,7 @@ elif page == "📊 Stock Analyzer":
         st.caption("⚠️ This prediction is based on historical patterns only. Not financial advice.")
 
 # ══════════════════════════════════════════════════════
-# PAGE 3 — PORTFOLIO CONSTRUCTOR
+# PAGE 3 — PORTFOLIO CONSTRUCTOR (INTERACTIVE)
 # ══════════════════════════════════════════════════════
 elif page == "💼 Portfolio Constructor":
     st.title("💼 Portfolio Constructor")
@@ -287,22 +277,17 @@ elif page == "💼 Portfolio Constructor":
             st.metric("Avg Beta",          f"{port['Beta'].mean():.3f}")
 
     st.markdown("---")
-
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    for ax, (name, port) in zip(axes, portfolios.items()):
+    st.markdown("### Portfolio Allocations by Investor Profile")
+    
+    pie_cols = st.columns(3)
+    for col, (name, port) in zip(pie_cols, portfolios.items()):
         weights = [100 / len(port)] * len(port)
-        ax.pie(weights, labels=port['Symbol'].values,
-               autopct='%1.0f%%', startangle=90,
-               colors=plt.cm.Set3.colors[:len(port)],
-               textprops={'fontsize': 8})
-        ax.set_title(f'{name}\nReturn: {port["Ann_Return"].mean():.1f}% | '
-                     f'Risk: {port["Ann_Volatility"].mean():.1f}% | '
-                     f'Sharpe: {port["Sharpe_Ratio"].mean():.2f}',
-                     fontsize=10, fontweight='bold')
-    plt.suptitle('Portfolio Allocations by Investor Profile', fontsize=13, fontweight='bold')
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
+        port['Weight'] = weights
+        fig_pie = px.pie(port, values='Weight', names='Symbol', hole=0.3,
+                         title=f"<b>{name}</b><br><sup>Return: {port['Ann_Return'].mean():.1f}% | Risk: {port['Ann_Volatility'].mean():.1f}%</sup>")
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label', hoverinfo='label+percent')
+        fig_pie.update_layout(showlegend=False, margin=dict(t=60, b=20, l=20, r=20))
+        col.plotly_chart(fig_pie, use_container_width=True)
 
     st.markdown("---")
     selected = st.selectbox("View detailed stock list", list(portfolios.keys()))
@@ -338,15 +323,11 @@ elif page == "⚠️ Risk & Beta Dashboard":
 
     st.markdown("---")
 
-    # Create a 2x2 layout using Streamlit columns
     row1_col1, row1_col2 = st.columns(2)
     row2_col1, row2_col2 = st.columns(2)
 
-    # ── CHART 1: Beta — All Stocks (Top Left) ──
     with row1_col1:
         beta_sorted = stats.sort_values('Beta').copy()
-        
-        # Assign categories for coloring
         def assign_risk(b):
             if b > 1.2: return 'Aggressive (Red)'
             elif b > 0.8: return 'Moderate (Blue)'
@@ -367,19 +348,15 @@ elif page == "⚠️ Risk & Beta Dashboard":
         fig1.update_layout(showlegend=False, yaxis={'categoryorder':'total ascending'})
         st.plotly_chart(fig1, use_container_width=True)
 
-    # ── CHART 2: Risk vs Return (Top Right) ──
     with row1_col2:
         fig2 = px.scatter(stats, x='Ann_Volatility', y='Ann_Return',
                           color='Sharpe_Ratio', color_continuous_scale='RdYlGn',
                           hover_name='Symbol', size_max=15,
                           title='Risk vs Return', height=500,
                           labels={'Ann_Volatility': 'Volatility (Risk) %', 'Ann_Return': 'Annual Return %'})
-        
-        # Add text labels on the scatter points
         fig2.update_traces(textposition='top center', marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ── CHART 3: Average Portfolio Beta (Bottom Left) ──
     with row2_col1:
         port_betas = [stats[stats['Symbol'].isin(p['Symbol'])]['Beta'].mean() for p in portfolios.values()]
         port_data = pd.DataFrame({
@@ -396,92 +373,83 @@ elif page == "⚠️ Risk & Beta Dashboard":
         fig3.update_layout(showlegend=False)
         st.plotly_chart(fig3, use_container_width=True)
 
-    # ── CHART 4: Sensitivity Simulation (Bottom Right) ──
     with row2_col2:
         market_changes = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
         sim_data = []
-        
-        # Base Market Line
         for m in market_changes:
             sim_data.append({'Market Change (%)': m, 'Portfolio Change (%)': m, 'Portfolio': 'Market (β=1.00)'})
-            
-        # Portfolio Lines
         for (name, _), beta in zip(portfolios.items(), port_betas):
             for m in market_changes:
-                sim_data.append({
-                    'Market Change (%)': m, 
-                    'Portfolio Change (%)': m * beta, 
-                    'Portfolio': f'{name} (β={beta:.2f})'
-                })
+                sim_data.append({'Market Change (%)': m, 'Portfolio Change (%)': m * beta, 'Portfolio': f'{name} (β={beta:.2f})'})
                 
         sim_df = pd.DataFrame(sim_data)
-        
         fig4 = px.line(sim_df, x='Market Change (%)', y='Portfolio Change (%)', color='Portfolio',
                        markers=True, title='Sensitivity Simulation', height=400)
         
-        # Make the market line dashed
         for trace in fig4.data:
             if 'Market' in trace.name:
                 trace.line.dash = 'dash'
                 trace.line.color = 'gray'
-                trace.mode = 'lines'  # ✅ This cleanly tells Plotly to only draw the line, no markers
+                trace.mode = 'lines'
 
         fig4.add_hline(y=0, line_color='black', line_width=1)
         fig4.add_vline(x=0, line_color='black', line_width=1)
         st.plotly_chart(fig4, use_container_width=True)
 
 # ══════════════════════════════════════════════════════
-# PAGE 5 — EXPLAINABLE RECOMMENDATIONS
+# PAGE 5 — EXPLAINABLE RECOMMENDATIONS (INTERACTIVE)
 # ══════════════════════════════════════════════════════
 elif page == "🔍 Explainable Recommendations":
     st.title("🔍 Explainable Recommendations")
     st.markdown("Understand exactly **why** each stock was selected for each portfolio.")
 
     selected = st.selectbox("Select Portfolio", list(portfolios.keys()))
-    port     = portfolios[selected]
+    port     = portfolios[selected].copy()
+    
+    # Map Beta to the portfolio dataframe for easier Plotly usage
+    port['Beta'] = [stats[stats['Symbol'] == s]['Beta'].values[0] if len(stats[stats['Symbol'] == s]) > 0 else 0 for s in port['Symbol']]
 
     st.markdown("---")
     st.subheader(f"Why each stock is in the {selected} Portfolio")
 
     for _, row in port.iterrows():
-        beta_val = stats[stats['Symbol'] == row['Symbol']]['Beta'].values
-        beta_str = f"{beta_val[0]:.3f}" if len(beta_val) > 0 else "N/A"
         with st.expander(f"📌 {row['Symbol']} — Why selected?"):
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Annual Return", f"{row['Ann_Return']:.1f}%")
             col2.metric("Volatility",    f"{row['Ann_Volatility']:.1f}%")
             col3.metric("Sharpe Ratio",  f"{row['Sharpe_Ratio']:.3f}")
-            col4.metric("Beta",          beta_str)
+            col4.metric("Beta",          f"{row['Beta']:.3f}")
 
     st.markdown("---")
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    syms      = port['Symbol'].values
-    beta_vals = [stats[stats['Symbol'] == s]['Beta'].values[0]
-                 if len(stats[stats['Symbol'] == s]) > 0 else 0 for s in syms]
-
-    axes[0, 0].barh(syms, port['Ann_Return'].values, color='mediumseagreen', alpha=0.8)
-    axes[0, 0].axvline(x=stats['Ann_Return'].mean(), color='red', linestyle='--', label='Avg')
-    axes[0, 0].set_title('Annual Return'); axes[0, 0].legend(); axes[0, 0].grid(True, alpha=0.3)
-
-    axes[0, 1].barh(syms, port['Ann_Volatility'].values, color='steelblue', alpha=0.8)
-    axes[0, 1].axvline(x=stats['Ann_Volatility'].mean(), color='red', linestyle='--', label='Avg')
-    axes[0, 1].set_title('Volatility (lower = safer)'); axes[0, 1].legend(); axes[0, 1].grid(True, alpha=0.3)
-
-    axes[1, 0].barh(syms, port['Sharpe_Ratio'].values, color='mediumpurple', alpha=0.8)
-    axes[1, 0].axvline(x=1.0, color='red', linestyle='--', label='Sharpe=1.0')
-    axes[1, 0].axvline(x=stats['Sharpe_Ratio'].mean(), color='orange', linestyle=':', label='Avg')
-    axes[1, 0].set_title('Sharpe Ratio'); axes[1, 0].legend(); axes[1, 0].grid(True, alpha=0.3)
-
-    axes[1, 1].barh(syms, beta_vals, color='darkorange', alpha=0.8)
-    axes[1, 1].axvline(x=1.0, color='red', linestyle='--', label='Market Beta=1.0')
-    axes[1, 1].set_title('Beta (lower = more defensive)'); axes[1, 1].legend(); axes[1, 1].grid(True, alpha=0.3)
-
-    plt.suptitle(f'Explainable Recommendations — {selected} Portfolio',
-                 fontsize=13, fontweight='bold')
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
+    
+    # 2x2 Interactive Bar Charts
+    bar_col1, bar_col2 = st.columns(2)
+    bar_col3, bar_col4 = st.columns(2)
+    
+    with bar_col1:
+        fig_ret = px.bar(port, x='Ann_Return', y='Symbol', orientation='h', title='Annual Return', color_discrete_sequence=['mediumseagreen'], height=350)
+        fig_ret.add_vline(x=stats['Ann_Return'].mean(), line_dash="dash", line_color="red", annotation_text="Market Avg")
+        fig_ret.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_ret, use_container_width=True)
+        
+    with bar_col2:
+        fig_vol = px.bar(port, x='Ann_Volatility', y='Symbol', orientation='h', title='Volatility (lower = safer)', color_discrete_sequence=['steelblue'], height=350)
+        fig_vol.add_vline(x=stats['Ann_Volatility'].mean(), line_dash="dash", line_color="red", annotation_text="Market Avg")
+        fig_vol.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_vol, use_container_width=True)
+        
+    with bar_col3:
+        fig_sh = px.bar(port, x='Sharpe_Ratio', y='Symbol', orientation='h', title='Sharpe Ratio', color_discrete_sequence=['mediumpurple'], height=350)
+        fig_sh.add_vline(x=1.0, line_dash="dash", line_color="red", annotation_text="Sharpe=1.0")
+        fig_sh.add_vline(x=stats['Sharpe_Ratio'].mean(), line_dash="dot", line_color="orange", annotation_text="Market Avg")
+        fig_sh.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_sh, use_container_width=True)
+        
+    with bar_col4:
+        fig_beta = px.bar(port, x='Beta', y='Symbol', orientation='h', title='Beta (lower = defensive)', color_discrete_sequence=['darkorange'], height=350)
+        fig_beta.add_vline(x=1.0, line_dash="dash", line_color="red", annotation_text="Market Beta=1.0")
+        fig_beta.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_beta, use_container_width=True)
 
     st.markdown("---")
     st.subheader("Portfolio Comparison — Radar Chart")
@@ -498,23 +466,25 @@ elif page == "🔍 Explainable Recommendations":
     normalized   = {k: [(v - min_v) / (max_v - min_v) * 100 for v in vals]
                     for k, vals in radar_data.items()}
 
-    labels   = ['Annual\nReturn', 'Safety', 'Sharpe\nRatio', 'Drawdown\nProtection']
-    num_vars = len(labels)
-    angles   = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
-    angles  += angles[:1]
+    labels   = ['Annual Return', 'Safety', 'Sharpe Ratio', 'Drawdown Protection']
+    
+    # Interactive Plotly Radar Chart
+    fig_radar = go.Figure()
+    
+    colors = ['mediumseagreen', 'steelblue', 'tomato']
+    for (name, values), color in zip(normalized.items(), colors):
+        fig_radar.add_trace(go.Scatterpolar(
+            r=values + [values[0]],
+            theta=labels + [labels[0]],
+            fill='toself',
+            name=name,
+            line_color=color
+        ))
 
-    fig2, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-    for (name, values), color in zip(normalized.items(), ['mediumseagreen', 'steelblue', 'tomato']):
-        vals = values + values[:1]
-        ax.plot(angles, vals, 'o-', linewidth=2.5, label=name, color=color)
-        ax.fill(angles, vals, alpha=0.15, color=color)
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels, size=11, fontweight='bold')
-    ax.set_ylim(0, 100)
-    ax.grid(color='grey', linestyle='--', linewidth=0.5, alpha=0.7)
-    ax.set_title('Portfolio Comparison Radar Chart\n(Higher = Better on all axes)',
-                 size=12, fontweight='bold', pad=20)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=10)
-    plt.tight_layout()
-    st.pyplot(fig2)
-    plt.close()
+    fig_radar.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        showlegend=True,
+        title='Portfolio Comparison Radar Chart<br><sup>(Higher = Better on all axes)</sup>',
+        height=600
+    )
+    st.plotly_chart(fig_radar, use_container_width=True)
