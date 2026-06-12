@@ -185,8 +185,13 @@ if page == "🏠 Home":
         st.error("**🔍 Explainable Recommendations**\nUnderstand exactly WHY each stock was selected using 4-metric visual justification")
 
     st.markdown("---")
-    st.markdown("### Dataset Overview")
-    st.dataframe(df[['Date', 'Symbol', 'Open', 'High', 'Low', 'Close', 'Volume']].head(10))
+    st.markdown("### Dataset Overview (Latest Data for All 50 Stocks)")
+    latest_data = df.groupby('Symbol').last().reset_index()
+    st.dataframe(
+        latest_data[['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume']],
+        use_container_width=True,
+        hide_index=True
+    )
 
 # ══════════════════════════════════════════════════════
 # PAGE 2 — STOCK ANALYZER
