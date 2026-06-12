@@ -127,10 +127,6 @@ aggressive = stats[
 portfolios = {'Conservative': conservative, 'Balanced': balanced, 'Aggressive': aggressive}
 
 # ── SIDEBAR ────────────────────────────────────────────
-st.sidebar.image(
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/NSE_logo.svg/320px-NSE_logo.svg.png",
-    width=200
-)
 st.sidebar.title("NIFTY-50 Platform")
 st.sidebar.markdown("---")
 page = st.sidebar.radio("Navigate", [
