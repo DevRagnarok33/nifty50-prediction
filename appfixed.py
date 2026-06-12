@@ -161,7 +161,7 @@ page = st.sidebar.radio("Navigate", [
 ])
 
 # ══════════════════════════════════════════════════════
-# PAGE 1 — HOME
+# PAGE 1 — HOME (WITH CHEAT SHEET)
 # ══════════════════════════════════════════════════════
 if page == "🏠 Home":
     st.title("📈 NIFTY-50 Investment Intelligence Platform")
@@ -175,15 +175,20 @@ if page == "🏠 Home":
     col4.metric("Years of Data",  "21 Years")
 
     st.markdown("---")
-    st.markdown("### What this platform does")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info("**📊 Stock Analyzer**\nAnalyze any NIFTY-50 stock — price trends, moving averages, returns, volatility and ML-based price prediction")
-        st.success("**⚠️ Risk & Beta Dashboard**\nQuantify risk using Sharpe Ratio, Max Drawdown, Volatility and Beta sensitivity analysis")
-    with col2:
-        st.warning("**💼 Portfolio Constructor**\nBuild optimized portfolios for Conservative, Balanced and Aggressive investor profiles")
-        st.error("**🔍 Explainable Recommendations**\nUnderstand exactly WHY each stock was selected using 4-metric visual justification")
-
+    
+    # ── NEW: METRIC CHEAT SHEET ──
+    st.markdown("### 📖 The Beginner's Metric Cheat Sheet")
+    st.write("We don't hide the complex math on this platform, but we do make it easy to read. Keep an eye out for these terms as you explore:")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.info("**📉 Volatility:** The roller-coaster metric. High volatility means the price swings wildly. Low means it's stable.")
+        st.success("**🛡️ Max Drawdown:** The worst-case scenario. If you bought at the absolute peak, this is how much you would have lost at the absolute bottom.")
+    with c2:
+        st.warning("**⚖️ Sharpe Ratio:** The efficiency score. It tells you if the returns you are getting are worth the risk you are taking. (Higher is better).")
+        st.error("**🛑 Sortino Ratio:** Similar to Sharpe, but it only punishes stocks for dropping in price, ignoring upward swings. (Higher is better).")
+    with c3:
+        st.info("**🔗 Beta:** The market magnet. A Beta of 1.0 means the stock moves exactly with the market. > 1 means it's aggressive, < 1 means it's defensive.")
+    
     st.markdown("---")
     st.markdown("### Dataset Overview (Latest Data for All 50 Stocks)")
     latest_data = df.groupby('Symbol').last().reset_index()
@@ -210,7 +215,7 @@ elif page == "📊 Stock Analyzer":
     col1.metric("Current Price",    f"₹{stock['Close'].iloc[-1]:.2f}")
     col2.metric("52W High",         f"₹{stock['Close'].tail(252).max():.2f}")
     col3.metric("52W Low",          f"₹{stock['Close'].tail(252).min():.2f}")
-    col4.metric("Avg Daily Return", f"{stock['Daily_Return'].mean():.3f}%", help="The average daily percentage change in the stock's price.")
+    col4.metric("Avg Daily Return", f"{stock['Daily_Return'].mean():.3f}%", help=TOOLTIPS["Volatility"])
 
     st.markdown("---")
 
@@ -221,10 +226,12 @@ elif page == "📊 Stock Analyzer":
     fig_price.update_layout(title=f'{symbol} — Price with Moving Averages', xaxis_title='Date', yaxis_title='Price (₹)', hovermode="x unified", height=450)
     st.plotly_chart(fig_price, use_container_width=True)
 
-    fig_vol = px.line(stock, x='Date', y='Volatility', title=f'{symbol} — 30-Day Rolling Volatility', height=350)
-    fig_vol.update_traces(line_color='red', line_width=1.5)
-    fig_vol.update_layout(hovermode="x unified", xaxis_title="Date", yaxis_title="Volatility")
-    st.plotly_chart(fig_vol, use_container_width=True)
+    # ── PROGRESSIVE DISCLOSURE: Hide Volatility Chart ──
+    with st.expander("📉 View Rolling Volatility Chart"):
+        fig_vol = px.line(stock, x='Date', y='Volatility', title=f'{symbol} — 30-Day Rolling Volatility', height=350)
+        fig_vol.update_traces(line_color='red', line_width=1.5)
+        fig_vol.update_layout(hovermode="x unified", xaxis_title="Date", yaxis_title="Volatility")
+        st.plotly_chart(fig_vol, use_container_width=True)
 
     st.markdown("---")
     st.subheader("🤖 ML Price Prediction")
@@ -264,12 +271,14 @@ elif page == "📊 Stock Analyzer":
         col3.metric("R²",   f"{r2:.4f}", help=TOOLTIPS["R2"])
         col4.metric("Dir. Accuracy", f"{directional_accuracy:.1f}%", help=TOOLTIPS["DirAcc"])
 
-        ml_df = pd.DataFrame({'Trading Days (Test Set)': range(len(y_test)), 'Actual Price': y_test.values, 'Predicted Price': y_pred})
-        fig_ml = go.Figure()
-        fig_ml.add_trace(go.Scatter(x=ml_df['Trading Days (Test Set)'], y=ml_df['Actual Price'], mode='lines', name='Actual Price', line=dict(color='steelblue', width=2)))
-        fig_ml.add_trace(go.Scatter(x=ml_df['Trading Days (Test Set)'], y=ml_df['Predicted Price'], mode='lines', name='Predicted Price', line=dict(color='orange', width=2, dash='dot')))
-        fig_ml.update_layout(title=f'{symbol} — Actual vs Predicted Price', xaxis_title='Trading Days (Test Set)', yaxis_title='Price (₹)', hovermode="x unified", height=400)
-        st.plotly_chart(fig_ml, use_container_width=True)
+        # ── PROGRESSIVE DISCLOSURE: Hide Actual vs Pred Chart ──
+        with st.expander("🔬 View Model Accuracy Graph"):
+            ml_df = pd.DataFrame({'Trading Days (Test Set)': range(len(y_test)), 'Actual Price': y_test.values, 'Predicted Price': y_pred})
+            fig_ml = go.Figure()
+            fig_ml.add_trace(go.Scatter(x=ml_df['Trading Days (Test Set)'], y=ml_df['Actual Price'], mode='lines', name='Actual Price', line=dict(color='steelblue', width=2)))
+            fig_ml.add_trace(go.Scatter(x=ml_df['Trading Days (Test Set)'], y=ml_df['Predicted Price'], mode='lines', name='Predicted Price', line=dict(color='orange', width=2, dash='dot')))
+            fig_ml.update_layout(title=f'{symbol} — Actual vs Predicted Price', xaxis_title='Trading Days (Test Set)', yaxis_title='Price (₹)', hovermode="x unified", height=400)
+            st.plotly_chart(fig_ml, use_container_width=True)
 
         st.markdown("---")
         st.subheader("🔮 Next Day Prediction")
@@ -289,10 +298,11 @@ elif page == "📊 Stock Analyzer":
         st.caption("⚠️ This prediction is based on historical patterns only. Not financial advice.")
 
 # ══════════════════════════════════════════════════════
-# PAGE 3 — PORTFOLIO CONSTRUCTOR
+# PAGE 3 — PORTFOLIO CONSTRUCTOR (PROGRESSIVE DISCLOSURE)
 # ══════════════════════════════════════════════════════
 elif page == "💼 Portfolio Constructor":
     st.title("💼 Portfolio Constructor")
+    st.write("We have automatically built three optimized portfolios based on different risk profiles. Review the top-level stats below.")
 
     col1, col2, col3 = st.columns(3)
     for col, (name, port), color in zip(
@@ -307,39 +317,42 @@ elif page == "💼 Portfolio Constructor":
             st.metric("Avg Beta",          f"{port['Beta'].mean():.3f}", help=TOOLTIPS["Beta"])
 
     st.markdown("---")
-    st.markdown("### Portfolio Allocations by Investor Profile")
     
-    pie_cols = st.columns(3)
-    for col, (name, port) in zip(pie_cols, portfolios.items()):
-        weights = [100 / len(port)] * len(port)
-        port['Weight'] = weights
-        fig_pie = px.pie(port, values='Weight', names='Symbol', hole=0.3,
-                         title=f"<b>{name}</b><br><sup>Return: {port['Ann_Return'].mean():.1f}% | Risk: {port['Ann_Volatility'].mean():.1f}%</sup>")
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label', hoverinfo='label+percent')
-        fig_pie.update_layout(showlegend=False, margin=dict(t=60, b=20, l=20, r=20))
-        col.plotly_chart(fig_pie, use_container_width=True)
+    # ── PROGRESSIVE DISCLOSURE: Hide the Pie Charts and Dataframes ──
+    with st.expander("📊 View Visual Allocations & Deep Dive Data", expanded=False):
+        st.markdown("### Portfolio Allocations by Investor Profile")
+        pie_cols = st.columns(3)
+        for col, (name, port) in zip(pie_cols, portfolios.items()):
+            weights = [100 / len(port)] * len(port)
+            port['Weight'] = weights
+            fig_pie = px.pie(port, values='Weight', names='Symbol', hole=0.3,
+                             title=f"<b>{name}</b><br><sup>Return: {port['Ann_Return'].mean():.1f}% | Risk: {port['Ann_Volatility'].mean():.1f}%</sup>")
+            fig_pie.update_traces(textposition='inside', textinfo='percent+label', hoverinfo='label+percent')
+            fig_pie.update_layout(showlegend=False, margin=dict(t=60, b=20, l=20, r=20))
+            col.plotly_chart(fig_pie, use_container_width=True)
 
-    st.markdown("---")
-    selected = st.selectbox("View detailed stock list", list(portfolios.keys()))
-    st.dataframe(
-        portfolios[selected][['Symbol', 'Ann_Return', 'Ann_Volatility', 'Sharpe_Ratio', 'Sortino_Ratio', 'Max_Drawdown', 'Beta']]
-        .reset_index(drop=True)
-        .style.format({
-            'Ann_Return'    : '{:.2f}%',
-            'Ann_Volatility': '{:.2f}%',
-            'Sharpe_Ratio'  : '{:.3f}',
-            'Sortino_Ratio' : '{:.3f}',  
-            'Max_Drawdown'  : '{:.2f}%',
-            'Beta'          : '{:.3f}'
-        }),
-        use_container_width=True
-    )
+        st.markdown("---")
+        selected = st.selectbox("Select a portfolio to view its exact stock list:", list(portfolios.keys()))
+        st.dataframe(
+            portfolios[selected][['Symbol', 'Ann_Return', 'Ann_Volatility', 'Sharpe_Ratio', 'Sortino_Ratio', 'Max_Drawdown', 'Beta']]
+            .reset_index(drop=True)
+            .style.format({
+                'Ann_Return'    : '{:.2f}%',
+                'Ann_Volatility': '{:.2f}%',
+                'Sharpe_Ratio'  : '{:.3f}',
+                'Sortino_Ratio' : '{:.3f}',  
+                'Max_Drawdown'  : '{:.2f}%',
+                'Beta'          : '{:.3f}'
+            }),
+            use_container_width=True
+        )
 
 # ══════════════════════════════════════════════════════
-# PAGE 4 — RISK & BETA DASHBOARD
+# PAGE 4 — RISK & BETA DASHBOARD (PROGRESSIVE DISCLOSURE)
 # ══════════════════════════════════════════════════════
 elif page == "⚠️ Risk & Beta Dashboard":
     st.title("⚠️ Risk & Beta Dashboard")
+    st.write("A quick glance at the extreme ends of the NIFTY-50 market risk spectrum.")
 
     col1, col2, col3, col4 = st.columns(4)
     safest   = stats.loc[stats['Ann_Volatility'].idxmin()]
@@ -354,85 +367,87 @@ elif page == "⚠️ Risk & Beta Dashboard":
 
     st.markdown("---")
 
-    row1_col1, row1_col2 = st.columns(2)
-    row2_col1, row2_col2 = st.columns(2)
+    # ── PROGRESSIVE DISCLOSURE: Hide the complex charts ──
+    with st.expander("📈 Explore Advanced Risk Charts (Beta, Sharpe, Simulations)", expanded=False):
+        row1_col1, row1_col2 = st.columns(2)
+        row2_col1, row2_col2 = st.columns(2)
 
-    with row1_col1:
-        beta_sorted = stats.sort_values('Beta').copy()
-        def assign_risk(b):
-            if b > 1.2: return 'Aggressive (Red)'
-            elif b > 0.8: return 'Moderate (Blue)'
-            else: return 'Defensive (Green)'
-            
-        beta_sorted['Risk_Profile'] = beta_sorted['Beta'].apply(assign_risk)
-        
-        fig1 = px.bar(beta_sorted, x='Beta', y='Symbol', orientation='h',
-                      color='Risk_Profile',
-                      color_discrete_map={
-                          'Aggressive (Red)': 'tomato',
-                          'Moderate (Blue)': 'steelblue',
-                          'Defensive (Green)': 'mediumseagreen'
-                      },
-                      title='Beta — All Stocks', height=500)
-        
-        fig1.add_vline(x=1.0, line_dash="dash", line_color="black", annotation_text="Market Beta=1.0")
-        fig1.update_layout(showlegend=False, yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig1, use_container_width=True)
-
-    with row1_col2:
-        fig2 = px.scatter(stats, x='Ann_Volatility', y='Ann_Return',
-                          color='Sharpe_Ratio', color_continuous_scale='RdYlGn',
-                          hover_name='Symbol', size_max=15,
-                          title='Risk vs Return', height=500,
-                          labels={'Ann_Volatility': 'Volatility (Risk) %', 'Ann_Return': 'Annual Return %'})
-        fig2.update_traces(textposition='top center', marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
-        st.plotly_chart(fig2, use_container_width=True)
-
-    with row2_col1:
-        port_betas = [stats[stats['Symbol'].isin(p['Symbol'])]['Beta'].mean() for p in portfolios.values()]
-        port_data = pd.DataFrame({
-            'Portfolio': list(portfolios.keys()),
-            'Beta': port_betas
-        })
-        
-        fig3 = px.bar(port_data, x='Portfolio', y='Beta', color='Portfolio',
-                      color_discrete_sequence=['mediumseagreen', 'steelblue', 'tomato'],
-                      text='Beta', title='Average Portfolio Beta', height=400)
-        
-        fig3.update_traces(texttemplate='%{text:.3f}', textposition='outside')
-        fig3.add_hline(y=1.0, line_dash="dash", line_color="black", annotation_text="Market Beta=1.0")
-        fig3.update_layout(showlegend=False)
-        st.plotly_chart(fig3, use_container_width=True)
-
-    with row2_col2:
-        market_changes = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
-        sim_data = []
-        for m in market_changes:
-            sim_data.append({'Market Change (%)': m, 'Portfolio Change (%)': m, 'Portfolio': 'Market (β=1.00)'})
-        for (name, _), beta in zip(portfolios.items(), port_betas):
-            for m in market_changes:
-                sim_data.append({'Market Change (%)': m, 'Portfolio Change (%)': m * beta, 'Portfolio': f'{name} (β={beta:.2f})'})
+        with row1_col1:
+            beta_sorted = stats.sort_values('Beta').copy()
+            def assign_risk(b):
+                if b > 1.2: return 'Aggressive (Red)'
+                elif b > 0.8: return 'Moderate (Blue)'
+                else: return 'Defensive (Green)'
                 
-        sim_df = pd.DataFrame(sim_data)
-        fig4 = px.line(sim_df, x='Market Change (%)', y='Portfolio Change (%)', color='Portfolio',
-                       markers=True, title='Sensitivity Simulation', height=400)
-        
-        for trace in fig4.data:
-            if 'Market' in trace.name:
-                trace.line.dash = 'dash'
-                trace.line.color = 'gray'
-                trace.mode = 'lines'
+            beta_sorted['Risk_Profile'] = beta_sorted['Beta'].apply(assign_risk)
+            
+            fig1 = px.bar(beta_sorted, x='Beta', y='Symbol', orientation='h',
+                          color='Risk_Profile',
+                          color_discrete_map={
+                              'Aggressive (Red)': 'tomato',
+                              'Moderate (Blue)': 'steelblue',
+                              'Defensive (Green)': 'mediumseagreen'
+                          },
+                          title='Beta — All Stocks', height=500)
+            
+            fig1.add_vline(x=1.0, line_dash="dash", line_color="black", annotation_text="Market Beta=1.0")
+            fig1.update_layout(showlegend=False, yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig1, use_container_width=True)
 
-        fig4.add_hline(y=0, line_color='black', line_width=1)
-        fig4.add_vline(x=0, line_color='black', line_width=1)
-        st.plotly_chart(fig4, use_container_width=True)
+        with row1_col2:
+            fig2 = px.scatter(stats, x='Ann_Volatility', y='Ann_Return',
+                              color='Sharpe_Ratio', color_continuous_scale='RdYlGn',
+                              hover_name='Symbol', size_max=15,
+                              title='Risk vs Return', height=500,
+                              labels={'Ann_Volatility': 'Volatility (Risk) %', 'Ann_Return': 'Annual Return %'})
+            fig2.update_traces(textposition='top center', marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
+            st.plotly_chart(fig2, use_container_width=True)
+
+        with row2_col1:
+            port_betas = [stats[stats['Symbol'].isin(p['Symbol'])]['Beta'].mean() for p in portfolios.values()]
+            port_data = pd.DataFrame({
+                'Portfolio': list(portfolios.keys()),
+                'Beta': port_betas
+            })
+            
+            fig3 = px.bar(port_data, x='Portfolio', y='Beta', color='Portfolio',
+                          color_discrete_sequence=['mediumseagreen', 'steelblue', 'tomato'],
+                          text='Beta', title='Average Portfolio Beta', height=400)
+            
+            fig3.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+            fig3.add_hline(y=1.0, line_dash="dash", line_color="black", annotation_text="Market Beta=1.0")
+            fig3.update_layout(showlegend=False)
+            st.plotly_chart(fig3, use_container_width=True)
+
+        with row2_col2:
+            market_changes = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
+            sim_data = []
+            for m in market_changes:
+                sim_data.append({'Market Change (%)': m, 'Portfolio Change (%)': m, 'Portfolio': 'Market (β=1.00)'})
+            for (name, _), beta in zip(portfolios.items(), port_betas):
+                for m in market_changes:
+                    sim_data.append({'Market Change (%)': m, 'Portfolio Change (%)': m * beta, 'Portfolio': f'{name} (β={beta:.2f})'})
+                    
+            sim_df = pd.DataFrame(sim_data)
+            fig4 = px.line(sim_df, x='Market Change (%)', y='Portfolio Change (%)', color='Portfolio',
+                           markers=True, title='Sensitivity Simulation', height=400)
+            
+            for trace in fig4.data:
+                if 'Market' in trace.name:
+                    trace.line.dash = 'dash'
+                    trace.line.color = 'gray'
+                    trace.mode = 'lines'
+
+            fig4.add_hline(y=0, line_color='black', line_width=1)
+            fig4.add_vline(x=0, line_color='black', line_width=1)
+            st.plotly_chart(fig4, use_container_width=True)
 
 # ══════════════════════════════════════════════════════
 # PAGE 5 — EXPLAINABLE RECOMMENDATIONS
 # ══════════════════════════════════════════════════════
 elif page == "🔍 Explainable Recommendations":
     st.title("🔍 Explainable Recommendations")
-    st.markdown("Understand exactly **why** each stock was selected for each portfolio.")
+    st.markdown("Understand exactly **why** each stock was selected for each portfolio. Click on any stock below to see its exact metrics.")
 
     selected = st.selectbox("Select Portfolio", list(portfolios.keys()))
     port     = portfolios[selected].copy()
@@ -440,10 +455,9 @@ elif page == "🔍 Explainable Recommendations":
     port['Beta'] = [stats[stats['Symbol'] == s]['Beta'].values[0] if len(stats[stats['Symbol'] == s]) > 0 else 0 for s in port['Symbol']]
 
     st.markdown("---")
-    st.subheader(f"Why each stock is in the {selected} Portfolio")
 
     for _, row in port.iterrows():
-        with st.expander(f"📌 {row['Symbol']} — Why selected?"):
+        with st.expander(f"📌 {row['Symbol']}"):
             col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Annual Return", f"{row['Ann_Return']:.1f}%", help="The expected yearly return based on historical data.")
             col2.metric("Volatility",    f"{row['Ann_Volatility']:.1f}%", help=TOOLTIPS["Volatility"])
@@ -453,67 +467,69 @@ elif page == "🔍 Explainable Recommendations":
 
     st.markdown("---")
     
-    bar_col1, bar_col2 = st.columns(2)
-    bar_col3, bar_col4 = st.columns(2)
-    
-    with bar_col1:
-        fig_ret = px.bar(port, x='Ann_Return', y='Symbol', orientation='h', title='Annual Return', color_discrete_sequence=['mediumseagreen'], height=350)
-        fig_ret.add_vline(x=stats['Ann_Return'].mean(), line_dash="dash", line_color="red", annotation_text="Market Avg")
-        fig_ret.update_layout(yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig_ret, use_container_width=True)
+    # ── PROGRESSIVE DISCLOSURE: Hide Visual Comparisons ──
+    with st.expander("🔬 View Visual Market Comparisons (Bar & Radar Charts)", expanded=False):
+        bar_col1, bar_col2 = st.columns(2)
+        bar_col3, bar_col4 = st.columns(2)
         
-    with bar_col2:
-        fig_vol = px.bar(port, x='Ann_Volatility', y='Symbol', orientation='h', title='Volatility (lower = safer)', color_discrete_sequence=['steelblue'], height=350)
-        fig_vol.add_vline(x=stats['Ann_Volatility'].mean(), line_dash="dash", line_color="red", annotation_text="Market Avg")
-        fig_vol.update_layout(yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig_vol, use_container_width=True)
+        with bar_col1:
+            fig_ret = px.bar(port, x='Ann_Return', y='Symbol', orientation='h', title='Annual Return', color_discrete_sequence=['mediumseagreen'], height=350)
+            fig_ret.add_vline(x=stats['Ann_Return'].mean(), line_dash="dash", line_color="red", annotation_text="Market Avg")
+            fig_ret.update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig_ret, use_container_width=True)
+            
+        with bar_col2:
+            fig_vol = px.bar(port, x='Ann_Volatility', y='Symbol', orientation='h', title='Volatility (lower = safer)', color_discrete_sequence=['steelblue'], height=350)
+            fig_vol.add_vline(x=stats['Ann_Volatility'].mean(), line_dash="dash", line_color="red", annotation_text="Market Avg")
+            fig_vol.update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig_vol, use_container_width=True)
+            
+        with bar_col3:
+            fig_sh = px.bar(port, x='Sharpe_Ratio', y='Symbol', orientation='h', title='Sharpe Ratio', color_discrete_sequence=['mediumpurple'], height=350)
+            fig_sh.add_vline(x=1.0, line_dash="dash", line_color="red", annotation_text="Sharpe=1.0")
+            fig_sh.add_vline(x=stats['Sharpe_Ratio'].mean(), line_dash="dot", line_color="orange", annotation_text="Market Avg")
+            fig_sh.update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig_sh, use_container_width=True)
+            
+        with bar_col4:
+            fig_beta = px.bar(port, x='Beta', y='Symbol', orientation='h', title='Beta (lower = defensive)', color_discrete_sequence=['darkorange'], height=350)
+            fig_beta.add_vline(x=1.0, line_dash="dash", line_color="red", annotation_text="Market Beta=1.0")
+            fig_beta.update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig_beta, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("Portfolio Comparison — Radar Chart")
+
+        radar_data = {name: [
+            p['Ann_Return'].mean(),
+            100 - p['Ann_Volatility'].mean(),
+            p['Sharpe_Ratio'].mean() * 100,
+            100 + p['Max_Drawdown'].mean()
+        ] for name, p in portfolios.items()}
+
+        all_vals     = [v for vals in radar_data.values() for v in vals]
+        min_v, max_v = min(all_vals), max(all_vals)
+        normalized   = {k: [(v - min_v) / (max_v - min_v) * 100 for v in vals]
+                        for k, vals in radar_data.items()}
+
+        labels   = ['Annual Return', 'Safety', 'Sharpe Ratio', 'Drawdown Protection']
         
-    with bar_col3:
-        fig_sh = px.bar(port, x='Sharpe_Ratio', y='Symbol', orientation='h', title='Sharpe Ratio', color_discrete_sequence=['mediumpurple'], height=350)
-        fig_sh.add_vline(x=1.0, line_dash="dash", line_color="red", annotation_text="Sharpe=1.0")
-        fig_sh.add_vline(x=stats['Sharpe_Ratio'].mean(), line_dash="dot", line_color="orange", annotation_text="Market Avg")
-        fig_sh.update_layout(yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig_sh, use_container_width=True)
+        fig_radar = go.Figure()
         
-    with bar_col4:
-        fig_beta = px.bar(port, x='Beta', y='Symbol', orientation='h', title='Beta (lower = defensive)', color_discrete_sequence=['darkorange'], height=350)
-        fig_beta.add_vline(x=1.0, line_dash="dash", line_color="red", annotation_text="Market Beta=1.0")
-        fig_beta.update_layout(yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig_beta, use_container_width=True)
+        colors = ['mediumseagreen', 'steelblue', 'tomato']
+        for (name, values), color in zip(normalized.items(), colors):
+            fig_radar.add_trace(go.Scatterpolar(
+                r=values + [values[0]],
+                theta=labels + [labels[0]],
+                fill='toself',
+                name=name,
+                line_color=color
+            ))
 
-    st.markdown("---")
-    st.subheader("Portfolio Comparison — Radar Chart")
-
-    radar_data = {name: [
-        p['Ann_Return'].mean(),
-        100 - p['Ann_Volatility'].mean(),
-        p['Sharpe_Ratio'].mean() * 100,
-        100 + p['Max_Drawdown'].mean()
-    ] for name, p in portfolios.items()}
-
-    all_vals     = [v for vals in radar_data.values() for v in vals]
-    min_v, max_v = min(all_vals), max(all_vals)
-    normalized   = {k: [(v - min_v) / (max_v - min_v) * 100 for v in vals]
-                    for k, vals in radar_data.items()}
-
-    labels   = ['Annual Return', 'Safety', 'Sharpe Ratio', 'Drawdown Protection']
-    
-    fig_radar = go.Figure()
-    
-    colors = ['mediumseagreen', 'steelblue', 'tomato']
-    for (name, values), color in zip(normalized.items(), colors):
-        fig_radar.add_trace(go.Scatterpolar(
-            r=values + [values[0]],
-            theta=labels + [labels[0]],
-            fill='toself',
-            name=name,
-            line_color=color
-        ))
-
-    fig_radar.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-        showlegend=True,
-        title='Portfolio Comparison Radar Chart<br><sup>(Higher = Better on all axes)</sup>',
-        height=600
-    )
-    st.plotly_chart(fig_radar, use_container_width=True)
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+            showlegend=True,
+            title='Portfolio Comparison Radar Chart<br><sup>(Higher = Better on all axes)</sup>',
+            height=600
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
