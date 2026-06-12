@@ -49,46 +49,28 @@ def load_data():
     return df
     
 
-# ── LOAD MARKET DATA ───────────────────────────────────
+# ── LOAD MARKET DATA (from CSV, no yfinance needed) ───
 @st.cache_data
-def load_market():
-    try:
-        nifty = yf.download("^NSEI", start="2000-01-01", end="2021-04-30",
-                            progress=False, auto_adjust=True)
-        if nifty.empty:
-            raise ValueError("Empty data returned")
-        # Flatten MultiIndex columns (newer yfinance)
-        if isinstance(nifty.columns, pd.MultiIndex):
-            nifty.columns = nifty.columns.get_level_values(0)
-        nifty = nifty.reset_index()
-        # ✅ Handle different date column names across yfinance versions
-        date_col = None
-        for col in ['Date', 'Datetime', 'index', 'date']:
-            if col in nifty.columns:
-                date_col = col
-                break
-        if date_col is None:
-            raise ValueError("No date column found")
-        nifty = nifty.rename(columns={date_col: 'Date'})
-        nifty['Date'] = pd.to_datetime(nifty['Date'])
-        nifty['Market_Return'] = nifty['Close'].pct_change() * 100
-        return nifty[['Date', 'Market_Return']].dropna().reset_index(drop=True)
-    except Exception as e:
-        st.warning(f"Could not download market data: {e}. Using fallback.")
-        # ✅ Fix: use len(dates) instead of hardcoded 5543
-        dates = pd.date_range('2000-01-01', '2021-04-30', freq='B')
-        return pd.DataFrame({
-            'Date': dates,
-            'Market_Return': np.random.normal(0.03, 1.0, len(dates))
-        })
+def load_market(df_json):
+    df = pd.read_json(df_json)
+    df['Date'] = pd.to_datetime(df['Date'])
+    # ✅ Compute market return as equal-weighted average of all 50 stocks
+    daily = (
+        df.groupby(['Symbol', 'Date'])['Close']
+        .last()
+        .groupby('Date')
+        .mean()
+        .pct_change() * 100
+    )
+    market = daily.reset_index()
+    market.columns = ['Date', 'Market_Return']
+    return market.dropna().reset_index(drop=True)
 
 # ── COMPUTE STATS ──────────────────────────────────────
 @st.cache_data
 def compute_stats(df_json, market_json):
     df     = pd.read_json(df_json)
     market = pd.read_json(market_json)
-
-    # Ensure proper datetime
     df['Date']     = pd.to_datetime(df['Date'])
     market['Date'] = pd.to_datetime(market['Date'])
     market = market.set_index('Date')
@@ -103,16 +85,14 @@ def compute_stats(df_json, market_json):
 
             ann_return  = s['Daily_Return'].mean() * 252 * 100
             ann_vol     = s['Daily_Return'].std() * np.sqrt(252) * 100
-            sharpe      = (s['Daily_Return'].mean() * 252) / (s['Daily_Return'].std() * np.sqrt(252)) if ann_vol != 0 else 0
+            sharpe      = (ann_return/100) / (ann_vol/100) if ann_vol != 0 else 0
             rolling_max = s['Close'].cummax()
             max_dd      = ((s['Close'] - rolling_max) / rolling_max).min() * 100
 
-            # ✅ Align on Date index safely
             combined = s[['Daily_Return']].copy()
             combined.columns = ['Stock_Return']
             combined['Stock_Return'] *= 100
-            combined = combined.join(market[['Market_Return']], how='inner')
-            combined = combined.dropna()
+            combined = combined.join(market[['Market_Return']], how='inner').dropna()
 
             beta = 0
             corr = 0
@@ -131,8 +111,7 @@ def compute_stats(df_json, market_json):
                 'Correlation'   : round(corr, 3)
             })
         except Exception:
-            pass  # skip broken symbols
-
+            pass
     return pd.DataFrame(results)
 
 # ── LOAD DATA ──────────────────────────────────────────
@@ -143,9 +122,8 @@ if df is None:
     st.code("from google.colab import files\nfiles.upload()  # upload NIFTY50_all.csv")
     st.stop()
 
-market = load_market()
+market = load_market(df.to_json())
 stats  = compute_stats(df.to_json(), market.to_json())
-
 # ── BUILD PORTFOLIOS ───────────────────────────────────
 conservative = stats[
     (stats['Ann_Volatility'] < stats['Ann_Volatility'].quantile(0.35)) &
